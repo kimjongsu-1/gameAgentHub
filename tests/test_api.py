@@ -113,3 +113,46 @@ def test_gateway_policy_blocks_external_calls_by_default():
         ).json()
         assert check["allowed"] is False
         assert check["reason"] == "external_ai_calls_disabled"
+
+
+def test_pipeline_status_and_role_pause_resume():
+    with TestClient(app) as client:
+        task = client.post(
+            "/api/tasks",
+            json={
+                "title": "게임개발 대기 테스트",
+                "task_type": "unity_bridge_setup",
+                "assignee_role": "game_development",
+                "input_payload": {"bridge_source": "06_game/unity_bridge/Editor/ApprovedAssetImporter.cs"},
+            },
+        ).json()
+        client.patch(f"/api/tasks/{task['id']}/status", json={"status": "READY"})
+        paused = client.post("/api/pipeline/roles/game_development/pause", params={"reason": "test_pause"})
+        assert paused.status_code == 200
+        assert paused.json()["paused_tasks"] >= 1
+        tasks = {item["id"]: item for item in client.get("/api/tasks").json()}
+        assert tasks[task["id"]]["status"] == "PAUSED"
+
+        status = client.get("/api/pipeline/status").json()
+        assert status["paused_tasks"] >= 1
+        assert any(stage["role"] == "planning_research" and not stage["configured"] for stage in status["stages"])
+
+        resumed = client.post("/api/pipeline/roles/game_development/resume")
+        assert resumed.status_code == 200
+        tasks = {item["id"]: item for item in client.get("/api/tasks").json()}
+        assert tasks[task["id"]]["status"] == "READY"
+
+
+def test_unconfigured_planning_worker_cannot_dispatch():
+    with TestClient(app) as client:
+        task = client.post(
+            "/api/tasks",
+            json={
+                "title": "기획 자료조사",
+                "task_type": "market_research",
+                "assignee_role": "planning_research",
+            },
+        ).json()
+        response = client.post(f"/api/tasks/{task['id']}/queue-dispatch")
+        assert response.status_code == 422
+        assert "not configured" in response.json()["detail"]

@@ -8,6 +8,7 @@ TASK_STATUSES = (
     "PLANNED",
     "READY",
     "RUNNING",
+    "PAUSED",
     "DESIGNING",
     "SPRITE_GENERATING",
     "QA_RUNNING",

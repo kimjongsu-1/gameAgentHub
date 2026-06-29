@@ -17,6 +17,7 @@
 - Unity Import·런타임 결과 보고서 회수 API
 - 재현 가능한 에셋 manifest JSON Schema
 - MCP 총괄 PM 서버 골격과 planning/design/development 작업 라우팅
+- 역할별 파이프라인 중지/재개 API와 대시보드 상태 표시
 
 외부 AI API 호출과 이미지 생성은 아직 활성화하지 않았습니다. 채팅 자동 전송 워커는 활성화되어 승인된 전달 큐를 5분 간격으로 처리합니다. Unity 프로젝트 변경은 `게임개발` 채팅이 승인 패키지를 받은 경우에만 수행합니다.
 

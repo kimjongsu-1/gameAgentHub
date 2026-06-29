@@ -11,6 +11,9 @@ def test_mcp_lists_pm_tools():
     names = {item["name"] for item in tool_schema()}
     assert "create_pipeline_task" in names
     assert "get_pipeline_status" in names
+    assert "get_pipeline_controls" in names
+    assert "pause_pipeline_role" in names
+    assert "resume_pipeline_role" in names
     assert "register_runtime_report" in names
 
 
@@ -41,3 +44,13 @@ def test_mcp_result_is_text_json():
     assert value["path"] == "/api/dispatches?status=PENDING"
     response = handle_request({"jsonrpc": "2.0", "id": 2, "method": "initialize"})
     assert json.loads(json.dumps(response))["result"]["serverInfo"]["name"] == "game-production-pm"
+
+
+def test_mcp_pause_role_calls_hub():
+    result = call_tool(
+        "pause_pipeline_role",
+        {"role": "game_development", "reason": "manual stop"},
+        hub_request=fake_hub,
+    )
+    assert result["method"] == "POST"
+    assert result["path"] == "/api/pipeline/roles/game_development/pause?reason=manual%20stop"

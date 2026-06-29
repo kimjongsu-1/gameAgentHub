@@ -17,6 +17,7 @@ python -m mcp_server.pm_server
 ## 제공 tool
 
 - `get_pipeline_status`
+- `get_pipeline_controls`
 - `list_workers`
 - `create_pipeline_task`
 - `create_handoff_package`
@@ -25,6 +26,8 @@ python -m mcp_server.pm_server
 - `claim_dispatch`
 - `mark_dispatch_sent`
 - `mark_dispatch_failed`
+- `pause_pipeline_role`
+- `resume_pipeline_role`
 - `register_runtime_report`
 - `get_gateway_policy`
 

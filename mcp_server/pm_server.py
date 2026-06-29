@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -56,6 +57,11 @@ def tool_schema() -> list[dict[str, Any]]:
         {
             "name": "get_pipeline_status",
             "description": "Return dashboard counts, recent tasks, approvals, dispatches, runtime reports, and budgets.",
+            "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+        {
+            "name": "get_pipeline_controls",
+            "description": "Return operational pipeline stage, MCP, paused, running, and pending dispatch status.",
             "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         },
         {
@@ -138,6 +144,29 @@ def tool_schema() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pause_pipeline_role",
+            "description": "Pause READY/RUNNING tasks for a worker role without deleting work.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["role"],
+                "properties": {
+                    "role": {"type": "string"},
+                    "reason": {"type": "string", "default": "manual_pm_pause"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "resume_pipeline_role",
+            "description": "Resume PAUSED tasks for a worker role back to READY.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["role"],
+                "properties": {"role": {"type": "string"}},
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "register_runtime_report",
             "description": "Register a Unity/runtime report and optional capture paths back into the PM hub.",
             "inputSchema": {
@@ -167,6 +196,8 @@ def call_tool(
 ) -> Any:
     if name == "get_pipeline_status":
         return hub_request("GET", "/api/dashboard", None).body
+    if name == "get_pipeline_controls":
+        return hub_request("GET", "/api/pipeline/status", None).body
     if name == "list_workers":
         return hub_request("GET", "/api/agents", None).body
     if name == "create_pipeline_task":
@@ -194,6 +225,11 @@ def call_tool(
             f"/api/dispatches/{arguments['dispatch_id']}",
             {"status": "FAILED", "last_error": arguments["last_error"]},
         ).body
+    if name == "pause_pipeline_role":
+        reason = urllib.parse.quote(arguments.get("reason", "manual_pm_pause"))
+        return hub_request("POST", f"/api/pipeline/roles/{arguments['role']}/pause?reason={reason}", {}).body
+    if name == "resume_pipeline_role":
+        return hub_request("POST", f"/api/pipeline/roles/{arguments['role']}/resume", {}).body
     if name == "register_runtime_report":
         return hub_request(
             "POST",

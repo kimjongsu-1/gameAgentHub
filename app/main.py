@@ -59,6 +59,33 @@ def load_agents() -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def worker_is_configured(worker: dict) -> bool:
+    thread_id = str(worker.get("thread_id") or "")
+    return bool(thread_id and not thread_id.startswith("TODO_"))
+
+
+def pipeline_stage_status(db: Session) -> list[dict]:
+    agents = load_agents()
+    role_names = ["planning_research", "design_orchestra", "game_development"]
+    stages = []
+    for role in role_names:
+        worker = next((item for item in agents["workers"] if item["role"] == role), None)
+        role_tasks = list(db.scalars(select(Task).where(Task.assignee_role == role)))
+        counts = Counter(task.status for task in role_tasks)
+        stages.append(
+            {
+                "role": role,
+                "thread_title": worker["thread_title"] if worker else role,
+                "thread_id": worker["thread_id"] if worker else None,
+                "configured": worker_is_configured(worker) if worker else False,
+                "task_counts": counts,
+                "paused": bool(counts.get("PAUSED", 0)),
+                "active": bool(counts.get("RUNNING", 0)),
+            }
+        )
+    return stages
+
+
 def resolve_workspace_path(value: str) -> Path:
     root = settings.resolved_workspace_root
     candidate = Path(value)
@@ -191,6 +218,8 @@ def queue_task_dispatch(task_id: str, db: Session = Depends(get_db)) -> Dispatch
         worker = find_worker(load_agents(), task.assignee_role)
     except ValueError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
+    if not worker_is_configured(worker):
+        raise HTTPException(422, detail=f"Worker thread is not configured for role: {task.assignee_role}")
     package = build_handoff_package(task, worker, settings.resolved_workspace_root)
     task.status = "READY"
     task.output_payload = {**(task.output_payload or {}), "handoff_package": package}
@@ -391,10 +420,65 @@ def finish_dispatch(
         if dispatch.target_task_id:
             target_task = db.get(Task, dispatch.target_task_id)
             if target_task:
-                target_task.status = "RUNNING"
+                output_payload = target_task.output_payload or {}
+                if output_payload.get("paused_by_pm"):
+                    target_task.status = "PAUSED"
+                else:
+                    target_task.status = "RUNNING"
     db.commit()
     db.refresh(dispatch)
     return dispatch
+
+
+@app.post("/api/pipeline/roles/{role}/pause")
+def pause_pipeline_role(role: str, reason: str = "manual_pm_pause", db: Session = Depends(get_db)) -> dict:
+    try:
+        find_worker(load_agents(), role)
+    except ValueError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    tasks = list(db.scalars(select(Task).where(Task.assignee_role == role, Task.status.in_(["READY", "RUNNING"]))))
+    for task in tasks:
+        task.status = "PAUSED"
+        task.output_payload = {
+            **(task.output_payload or {}),
+            "paused_by_pm": True,
+            "pause_reason": reason,
+            "paused_at": datetime.now(timezone.utc).isoformat(),
+        }
+    db.commit()
+    return {"role": role, "paused_tasks": len(tasks), "reason": reason}
+
+
+@app.post("/api/pipeline/roles/{role}/resume")
+def resume_pipeline_role(role: str, db: Session = Depends(get_db)) -> dict:
+    try:
+        find_worker(load_agents(), role)
+    except ValueError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    tasks = list(db.scalars(select(Task).where(Task.assignee_role == role, Task.status == "PAUSED")))
+    for task in tasks:
+        output_payload = {**(task.output_payload or {})}
+        output_payload["paused_by_pm"] = False
+        output_payload["resumed_at"] = datetime.now(timezone.utc).isoformat()
+        task.output_payload = output_payload
+        task.status = "READY"
+    db.commit()
+    return {"role": role, "resumed_tasks": len(tasks)}
+
+
+@app.get("/api/pipeline/status")
+def pipeline_status(db: Session = Depends(get_db)) -> dict:
+    return {
+        "stages": pipeline_stage_status(db),
+        "pending_dispatches": db.scalar(select(func.count()).select_from(Dispatch).where(Dispatch.status == "PENDING")),
+        "running_tasks": db.scalar(select(func.count()).select_from(Task).where(Task.status == "RUNNING")),
+        "paused_tasks": db.scalar(select(func.count()).select_from(Task).where(Task.status == "PAUSED")),
+        "mcp": {
+            "server_name": "game_production_pm",
+            "registered_in_codex_config": True,
+            "hub_url": "http://127.0.0.1:8000",
+        },
+    }
 
 
 @app.post("/api/dispatches/{dispatch_id}/retry", response_model=DispatchRead)
@@ -559,6 +643,7 @@ def dashboard_data(db: Session = Depends(get_db)) -> dict:
         "asset_counts": asset_counts,
         "dispatch_counts": dispatch_counts,
         "runtime_counts": runtime_counts,
+        "pipeline_stages": pipeline_stage_status(db),
         "recent_tasks": [TaskRead.model_validate(task) for task in tasks],
         "pending_approvals": [ApprovalRead.model_validate(item) for item in pending],
         "recent_dispatches": [DispatchRead.model_validate(item) for item in recent_dispatches],

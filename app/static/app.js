@@ -32,6 +32,21 @@ function runtimeRow(item) {
   return `<div class="row"><strong>${escapeHtml(item.asset_id || item.task_id)}</strong><span class="status">${item.status}</span><small>${escapeHtml(item.report_path)}</small></div>`;
 }
 
+function pipelineStageRow(stage) {
+  const flags = [
+    stage.configured ? "연결됨" : "연결 필요",
+    stage.paused ? "중지됨" : (stage.active ? "실행 중" : "대기"),
+  ];
+  const counts = Object.entries(stage.task_counts || {})
+    .map(([name, value]) => `${name}:${value}`)
+    .join(" · ") || "작업 없음";
+  return `<div class="stage-card ${stage.configured ? "" : "needs-config"}">
+    <strong>${escapeHtml(stage.thread_title)}</strong>
+    <span>${flags.map(escapeHtml).join(" · ")}</span>
+    <small>${escapeHtml(stage.role)} · ${escapeHtml(counts)}</small>
+  </div>`;
+}
+
 function escapeHtml(value) {
   const node = document.createElement("div");
   node.textContent = value ?? "";
@@ -59,6 +74,11 @@ async function loadDashboard() {
     ];
     el("summary").innerHTML = cards.map(([name, value]) => `<div class="metric"><span>${name}</span><strong>${value}</strong></div>`).join("");
 
+    const stages = data.pipeline_stages || [];
+    el("pipeline-status").innerHTML = stages.length
+      ? stages.map(pipelineStageRow).join("")
+      : `<p class="subtitle">파이프라인 상태를 불러올 수 없습니다.</p>`;
+
     el("tasks").className = data.recent_tasks.length ? "list" : "list empty";
     el("tasks").innerHTML = data.recent_tasks.length ? data.recent_tasks.map(taskRow).join("") : "등록된 작업이 없습니다.";
     el("approval-count").textContent = data.pending_approvals.length;
@@ -81,7 +101,7 @@ async function loadDashboard() {
       const hard = Number(data.budgets[provider]?.hard || 0);
       return `<div class="cost-card"><small>${provider.toUpperCase()}</small><strong>$${spent.toFixed(2)}</strong><span class="subtitle">한도 ${hard ? `$${hard.toFixed(2)}` : "미설정"}</span></div>`;
     }).join("");
-    el("gateway").innerHTML = `<p class="subtitle">Gateway: ${gateway.external_calls_enabled ? "외부 호출 허용" : "외부 호출 차단"} · 기본 정책 ${gateway.default_policy}</p>`;
+    el("gateway").innerHTML = `<p class="subtitle">Gateway: ${gateway.external_calls_enabled ? "외부 호출 허용" : "외부 호출 차단"} · 기본 정책 ${gateway.default_policy} · MCP: game_production_pm</p>`;
   } catch (error) {
     el("health").textContent = "연결 실패";
     el("health").className = "health";
