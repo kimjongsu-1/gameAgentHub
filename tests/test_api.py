@@ -1,6 +1,14 @@
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.main import app
+
+
+PNG_1X1 = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\xff"
+    b"\xff?\x00\x05\xfe\x02\xfeA\xe2!\xbc\x00\x00\x00\x00IEND\xaeB`\x82"
+)
 
 
 def test_health_and_agents():
@@ -8,35 +16,37 @@ def test_health_and_agents():
         assert client.get("/health").json()["status"] == "ok"
         agents = client.get("/api/agents").json()
         assert agents["orchestrator"]["thread_title"] == "게임 제작 통합 파이프라인 구축"
+        assert agents["planning"]["mode"] == "user_direct"
+        assert agents["qa"]["mode"] == "free_local_tools"
         assert {worker["role"] for worker in agents["workers"]} == {
-            "planning_research",
             "design_orchestra",
             "game_development",
         }
         assert {worker["thread_title"] for worker in agents["workers"]} >= {
-            "게임 개발 기획",
             "게임 개발 디자인",
             "게임개발",
         }
 
 
-def test_planning_research_handoff_package():
+def test_design_handoff_package_documents_user_planning_and_local_qa():
     with TestClient(app) as client:
         task = client.post(
             "/api/tasks",
             json={
-                "title": "방치형 RPG 핵심 루프 조사",
-                "task_type": "system_design",
-                "assignee_role": "planning_research",
-                "input_payload": {"genre": "mobile idle RPG", "focus": "retention loop"},
+                "title": "방치형 RPG 주인공 16프레임 제작",
+                "task_type": "sprite_16_frame",
+                "assignee_role": "design_orchestra",
+                "input_payload": {"user_planning": "검을 쓰는 도깨비 주인공", "frame_count": 16},
             },
         ).json()
         response = client.post(f"/api/tasks/{task['id']}/handoff-package")
         assert response.status_code == 200
         package = response.json()
-        assert package["target_thread_title"] == "게임 개발 기획"
-        assert "기획 조사 요약 문서" in package["prompt"]
-        assert "디자인팀 전달 요구사항" in package["prompt"]
+        assert package["target_thread_title"] == "게임 개발 디자인"
+        assert "기획/자료조사는 사용자가 직접 제공한 내용" in package["prompt"]
+        assert "반복 검사는 무료 로컬 QA" in package["prompt"]
+        assert "발바닥 기준점은 모든 프레임에서 같은 y좌표" in package["prompt"]
+        assert "프레임 위치가 흔들리면 재작업 대상" in package["prompt"]
 
 
 def test_task_approval_flow_without_linked_game_asset():
@@ -44,7 +54,7 @@ def test_task_approval_flow_without_linked_game_asset():
         task = client.post(
             "/api/tasks",
             json={
-                "title": "두억시니 걷기 모션",
+                "title": "도깨비 걷기 모션",
                 "task_type": "sprite_16_frame",
                 "assignee_role": "design_orchestra",
                 "input_payload": {"frame_count": 16},
@@ -58,7 +68,7 @@ def test_task_approval_flow_without_linked_game_asset():
             json={
                 "task_id": task_id,
                 "approval_type": "SPRITE_GIF",
-                "summary": "16프레임 걷기 모션 검수",
+                "summary": "16프레임 걷기 모션 검토",
                 "preview_paths": ["05_sprites/qa/preview.gif"],
             },
         )
@@ -99,6 +109,38 @@ def test_asset_uniqueness():
         assert saved["metadata"]["direction"] == "left"
 
 
+def test_super_grok_animation_prompt_package_from_character_image():
+    workspace = get_settings().resolved_workspace_root
+    image_path = workspace / "03_character_masters" / "hero.png"
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(PNG_1X1)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/super-grok/animation-prompts",
+            json={
+                "title": "Hero slash skill animation",
+                "request_type": "skill_animation",
+                "reference_image_path": "03_character_masters/hero.png",
+                "character_name": "Hero",
+                "animation_goal": "Create a fast sword slash with anticipation, impact flash, and recovery pose.",
+                "style_notes": "2D mobile idle RPG, clean silhouette, simple background.",
+                "duration_seconds": 2.5,
+                "aspect_ratio": "1:1",
+            },
+        )
+        assert response.status_code == 201
+        package = response.json()
+        assert package["status"] == "READY"
+        assert package["reference_image_path"] == "03_character_masters/hero.png"
+        assert "Use the attached single reference image" in package["prompt"]
+        assert "Do not redesign the character" in package["negative_prompt"]
+        assert (workspace / package["package_path"]).is_file()
+
+        dashboard = client.get("/api/dashboard").json()
+        assert dashboard["recent_super_grok_prompts"][0]["id"] == package["id"]
+
+
 def test_gateway_policy_blocks_external_calls_by_default():
     with TestClient(app) as client:
         policy = client.get("/api/gateway/policy").json()
@@ -137,7 +179,10 @@ def test_pipeline_status_and_role_pause_resume():
         assert status["paused_tasks"] >= 1
         assert status["architecture"]["dispatcher_mode"] == "manual"
         assert status["architecture"]["game_development_locked"] is True
-        assert any(stage["role"] == "planning_research" and not stage["configured"] for stage in status["stages"])
+        assert status["architecture"]["planning_mode"] == "user_direct"
+        assert status["architecture"]["repeated_qa_mode"] == "free_local_tools"
+        assert any(stage["role"] == "user_direct_planning" and stage["configured"] for stage in status["stages"])
+        assert any(stage["role"] == "local_free_qa" and stage["configured"] for stage in status["stages"])
 
         resumed = client.post("/api/pipeline/roles/game_development/resume")
         assert resumed.status_code == 200
@@ -145,19 +190,19 @@ def test_pipeline_status_and_role_pause_resume():
         assert tasks[task["id"]]["status"] == "READY"
 
 
-def test_unconfigured_planning_worker_cannot_dispatch():
+def test_removed_planning_worker_cannot_dispatch():
     with TestClient(app) as client:
         task = client.post(
             "/api/tasks",
             json={
-                "title": "기획 자료조사",
+                "title": "사용자 직접 기획 메모",
                 "task_type": "market_research",
                 "assignee_role": "planning_research",
             },
         ).json()
         response = client.post(f"/api/tasks/{task['id']}/queue-dispatch")
         assert response.status_code == 422
-        assert "not configured" in response.json()["detail"]
+        assert "No worker configured" in response.json()["detail"]
 
 
 def test_pipeline_architecture_documents_pm_routing():
@@ -168,4 +213,6 @@ def test_pipeline_architecture_documents_pm_routing():
         assert data["pm_owner"] == "MCP server: game_production_pm"
         assert "dispatch records" in data["routing_model"]
         assert data["dispatcher_status"] == "disabled_until_user_requests"
-        assert data["planning_connected"] is False
+        assert data["planning_connected"] is True
+        assert data["planning_mode"] == "user_direct"
+        assert data["repeated_qa_mode"] == "free_local_tools"

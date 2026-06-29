@@ -3,6 +3,7 @@ from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -14,7 +15,16 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import Base, engine, get_db
 from app.handoff import build_handoff_package, find_worker
-from app.models import ApiUsage, Approval, ApprovalAsset, Asset, Dispatch, RuntimeReport, Task
+from app.models import (
+    ApiUsage,
+    Approval,
+    ApprovalAsset,
+    Asset,
+    Dispatch,
+    RuntimeReport,
+    SuperGrokPromptPackage,
+    Task,
+)
 from app.schemas import (
     TASK_STATUSES,
     ApiUsageCreate,
@@ -30,6 +40,8 @@ from app.schemas import (
     RuntimeReportCreate,
     RuntimeReportRead,
     SpriteQARunRequest,
+    SuperGrokPromptCreate,
+    SuperGrokPromptRead,
     TaskCreate,
     TaskRead,
     TaskStatusUpdate,
@@ -64,9 +76,9 @@ def worker_is_configured(worker: dict) -> bool:
     return bool(thread_id and not thread_id.startswith("TODO_"))
 
 
-def pipeline_stage_status(db: Session) -> list[dict]:
+def _legacy_pipeline_stage_status(db: Session) -> list[dict]:
     agents = load_agents()
-    role_names = ["planning_research", "design_orchestra", "game_development"]
+    role_names = ["user_direct_planning", "design_orchestra", "game_development"]
     stages = []
     for role in role_names:
         worker = next((item for item in agents["workers"] if item["role"] == role), None)
@@ -86,9 +98,9 @@ def pipeline_stage_status(db: Session) -> list[dict]:
     return stages
 
 
-def pipeline_architecture_status(db: Session) -> dict:
+def _legacy_pipeline_architecture_status(db: Session) -> dict:
     stages = pipeline_stage_status(db)
-    planning_stage = next((stage for stage in stages if stage["role"] == "planning_research"), None)
+    planning_stage = None
     game_stage = next((stage for stage in stages if stage["role"] == "game_development"), None)
     return {
         "pm_owner": "MCP server: game_production_pm",
@@ -102,9 +114,9 @@ def pipeline_architecture_status(db: Session) -> dict:
         "planning_connected": bool(planning_stage and planning_stage["configured"]),
         "next_required_connections": [
             {
-                "role": "planning_research",
+                "role": "user_direct_planning",
                 "needed": not bool(planning_stage and planning_stage["configured"]),
-                "action": "게임 개발 기획 채팅의 thread_id를 config/agents.json에 등록",
+                "action": "기획/자료조사는 사용자가 직접 수행하므로 별도 thread_id 등록이 필요하지 않음",
             },
             {
                 "role": "dispatcher",
@@ -118,6 +130,98 @@ def pipeline_architecture_status(db: Session) -> dict:
             {"step": 3, "owner": "Codex Dispatcher", "action": "승인된 dispatch를 기존 채팅창으로 전달"},
             {"step": 4, "owner": "Worker Chat", "action": "기획/디자인/개발 작업 수행"},
             {"step": 5, "owner": "FastAPI Hub", "action": "결과 보고서와 승인 상태 회수"},
+        ],
+    }
+
+
+def pipeline_stage_status(db: Session) -> list[dict]:
+    agents = load_agents()
+    stages = [
+        {
+            "role": "user_direct_planning",
+            "thread_title": "사용자 직접 기획",
+            "thread_id": None,
+            "configured": True,
+            "task_counts": {},
+            "paused": False,
+            "active": False,
+            "mode": agents.get("planning", {}).get("mode", "user_direct"),
+            "description": agents.get("planning", {}).get(
+                "description",
+                "기획과 자료조사는 사용자가 직접 수행하고 PM이 작업 지시서로 정리한다.",
+            ),
+        }
+    ]
+    for role in ["design_orchestra", "local_free_qa", "game_development"]:
+        if role == "local_free_qa":
+            qa_tasks = list(db.scalars(select(Task).where(Task.status.in_(["QA_RUNNING", "REVISION_REQUIRED"]))))
+            counts = Counter(task.status for task in qa_tasks)
+            stages.append(
+                {
+                    "role": role,
+                    "thread_title": "무료 로컬 반복 QA",
+                    "thread_id": None,
+                    "configured": True,
+                    "task_counts": counts,
+                    "paused": False,
+                    "active": bool(counts.get("QA_RUNNING", 0)),
+                    "mode": agents.get("qa", {}).get("mode", "free_local_tools"),
+                    "description": agents.get("qa", {}).get(
+                        "description",
+                        "외부 AI API 없이 로컬 Sprite QA와 런타임 보고서 등록으로 반복 검사를 처리한다.",
+                    ),
+                }
+            )
+            continue
+        worker = next((item for item in agents["workers"] if item["role"] == role), None)
+        role_tasks = list(db.scalars(select(Task).where(Task.assignee_role == role)))
+        counts = Counter(task.status for task in role_tasks)
+        stages.append(
+            {
+                "role": role,
+                "thread_title": worker["thread_title"] if worker else role,
+                "thread_id": worker["thread_id"] if worker else None,
+                "configured": worker_is_configured(worker) if worker else False,
+                "task_counts": counts,
+                "paused": bool(counts.get("PAUSED", 0)),
+                "active": bool(counts.get("RUNNING", 0)),
+            }
+        )
+    return stages
+
+
+def pipeline_architecture_status(db: Session) -> dict:
+    agents = load_agents()
+    stages = pipeline_stage_status(db)
+    game_stage = next((stage for stage in stages if stage["role"] == "game_development"), None)
+    return {
+        "pm_owner": "MCP server: game_production_pm",
+        "hub_role": "FastAPI dashboard, DB, approval, local QA, dispatch queue, runtime report storage",
+        "routing_model": "MCP PM creates/updates tasks and dispatch records; Codex dispatcher sends approved dispatch prompts to existing worker chats.",
+        "planning_mode": agents.get("planning", {}).get("mode", "user_direct"),
+        "planning_owner": agents.get("planning", {}).get("owner", "user"),
+        "repeated_qa_mode": agents.get("qa", {}).get("mode", "free_local_tools"),
+        "repeated_qa_owner": agents.get("qa", {}).get("owner", "local_hub"),
+        "dispatcher_mode": "manual",
+        "dispatcher_status": "disabled_until_user_requests",
+        "external_ai_policy": settings.gateway_default_policy,
+        "external_ai_calls_enabled": settings.external_ai_calls_enabled,
+        "game_development_locked": bool(game_stage and game_stage["paused"]),
+        "planning_connected": True,
+        "next_required_connections": [
+            {
+                "role": "dispatcher",
+                "needed": True,
+                "action": "사용자가 명시적으로 요청할 때만 수동 dispatch 처리 또는 자동화 재활성화",
+            },
+        ],
+        "flow": [
+            {"step": 1, "owner": "User", "action": "기획과 자료조사를 직접 작성"},
+            {"step": 2, "owner": "MCP PM", "action": "사용자 기획을 작업 지시서로 정리하고 디자인 작업 생성"},
+            {"step": 3, "owner": "Design Orchestra", "action": "캐릭터 디자인, 16프레임 스프라이트, 애니메이션 소스 제작"},
+            {"step": 4, "owner": "Local Free QA", "action": "Sprite QA, GIF, 컨택트시트, 어니언스킨, 런타임 보고서로 반복 검사"},
+            {"step": 5, "owner": "User", "action": "미적/게임성 최종 승인"},
+            {"step": 6, "owner": "Game Development", "action": "사용자가 게임개발 시작을 허가한 뒤 승인 에셋만 Unity에 적용"},
         ],
     }
 
@@ -152,6 +256,57 @@ def asset_to_schema(asset: Asset) -> AssetRead:
         created_at=asset.created_at,
         updated_at=asset.updated_at,
     )
+
+
+def build_super_grok_prompt(payload: SuperGrokPromptCreate, reference_image_path: str) -> tuple[str, str, dict]:
+    character = payload.character_name or payload.asset_id or "attached character"
+    request_label = "skill animation" if payload.request_type == "skill_animation" else "cinematic cutscene"
+    style_notes = payload.style_notes or "Preserve the original character silhouette, outfit, color palette, and game-ready readability."
+    prompt = "\n".join(
+        [
+            f"Use the attached single reference image as the exact character identity for a {request_label}.",
+            f"Character: {character}",
+            f"Goal: {payload.animation_goal}",
+            f"Duration: about {payload.duration_seconds:g} seconds",
+            f"Aspect ratio: {payload.aspect_ratio}",
+            "",
+            "Production requirements:",
+            "- Keep the character recognizable from the source image.",
+            "- Maintain consistent face, costume, proportions, weapon/accessory details, and color palette.",
+            "- Create clear motion staging suitable for a mobile idle RPG.",
+            "- Emphasize readable silhouettes, snappy timing, and strong anticipation/impact/recovery beats.",
+            "- Avoid changing the character design unless explicitly required by the animation goal.",
+            "",
+            f"Style notes: {style_notes}",
+            "",
+            "Output focus:",
+            "- A polished animation/cutscene preview that can be reviewed by the PM before game integration.",
+            "- If the tool supports it, keep the background simple or transparent-friendly for later editing.",
+        ]
+    )
+    negative_prompt = (
+        "Do not redesign the character, do not change the costume, do not add extra limbs, "
+        "do not create a different face, do not use unreadable motion blur, do not add text, "
+        "logos, watermarks, UI frames, or unrelated background characters."
+    )
+    package_payload = payload.model_dump()
+    package_payload.update(
+        {
+            "provider_target": "super_grok_manual",
+            "external_api_call": False,
+            "reference_image_path": reference_image_path,
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "manual_steps": [
+                "Open SuperGrok manually.",
+                "Upload the reference image shown on the dashboard.",
+                "Paste the generated prompt.",
+                "Paste the negative prompt if the tool provides a negative prompt field.",
+                "Return the result/capture to the hub for PM review.",
+            ],
+        }
+    )
+    return prompt, negative_prompt, package_payload
 
 
 @app.get("/", include_in_schema=False)
@@ -343,6 +498,90 @@ def create_asset(payload: AssetCreate, db: Session = Depends(get_db)) -> AssetRe
         raise HTTPException(409, detail="asset_id already exists") from exc
     db.refresh(asset)
     return asset_to_schema(asset)
+
+
+@app.get("/api/super-grok/animation-prompts", response_model=list[SuperGrokPromptRead])
+def list_super_grok_prompts(
+    status: str | None = None,
+    limit: int = Query(default=20, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> list[SuperGrokPromptPackage]:
+    query = select(SuperGrokPromptPackage).order_by(SuperGrokPromptPackage.created_at.desc()).limit(limit)
+    if status:
+        query = query.where(SuperGrokPromptPackage.status == status)
+    return list(db.scalars(query))
+
+
+@app.post("/api/super-grok/animation-prompts", response_model=SuperGrokPromptRead, status_code=201)
+def create_super_grok_prompt(payload: SuperGrokPromptCreate, db: Session = Depends(get_db)) -> SuperGrokPromptPackage:
+    if not payload.reference_image_path and not payload.asset_id:
+        raise HTTPException(422, detail="reference_image_path or asset_id is required")
+
+    asset = None
+    reference_value = payload.reference_image_path
+    if payload.asset_id:
+        asset = db.scalar(select(Asset).where(Asset.asset_id == payload.asset_id))
+        if not asset:
+            raise HTTPException(404, detail=f"Asset not found: {payload.asset_id}")
+        reference_value = reference_value or asset.file_path
+
+    assert reference_value is not None
+    reference_path = resolve_workspace_path(reference_value)
+    if reference_path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"} or not reference_path.is_file():
+        raise HTTPException(422, detail="Reference image must be an existing PNG/JPG/WebP file in the workspace")
+
+    relative_reference = reference_path.relative_to(settings.resolved_workspace_root).as_posix()
+    prompt, negative_prompt, package_payload = build_super_grok_prompt(payload, relative_reference)
+    package_id = str(uuid4())
+    output_dir = settings.resolved_workspace_root / "07_cinematics" / "work" / "super_grok_requests"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    package_path = output_dir / f"{package_id}.json"
+    markdown_path = output_dir / f"{package_id}.md"
+    relative_package_path = package_path.relative_to(settings.resolved_workspace_root).as_posix()
+    package_payload.update(
+        {
+            "id": package_id,
+            "package_path": relative_package_path,
+            "markdown_path": markdown_path.relative_to(settings.resolved_workspace_root).as_posix(),
+            "source_asset_file_path": asset.file_path if asset else None,
+        }
+    )
+    package_path.write_text(json.dumps(package_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    markdown_path.write_text(
+        "\n".join(
+            [
+                f"# {payload.title}",
+                "",
+                "## SuperGrok prompt",
+                prompt,
+                "",
+                "## Negative prompt",
+                negative_prompt,
+                "",
+                f"Reference image: {relative_reference}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    package = SuperGrokPromptPackage(
+        id=package_id,
+        source_task_id=payload.source_task_id,
+        asset_id=payload.asset_id,
+        title=payload.title,
+        request_type=payload.request_type,
+        status="READY",
+        reference_image_path=relative_reference,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        package_path=relative_package_path,
+        package_payload=package_payload,
+        created_by=payload.created_by,
+    )
+    db.add(package)
+    db.commit()
+    db.refresh(package)
+    return package
 
 
 @app.get("/api/approvals", response_model=list[ApprovalRead])
@@ -675,6 +914,9 @@ def dashboard_data(db: Session = Depends(get_db)) -> dict:
     recent_runtime_reports = list(
         db.scalars(select(RuntimeReport).order_by(RuntimeReport.created_at.desc()).limit(12))
     )
+    recent_super_grok_prompts = list(
+        db.scalars(select(SuperGrokPromptPackage).order_by(SuperGrokPromptPackage.created_at.desc()).limit(6))
+    )
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     costs = monthly_provider_costs(db)
     asset_counts = Counter(asset.status for asset in db.scalars(select(Asset)))
@@ -691,6 +933,7 @@ def dashboard_data(db: Session = Depends(get_db)) -> dict:
         "pending_approvals": [ApprovalRead.model_validate(item) for item in pending],
         "recent_dispatches": [DispatchRead.model_validate(item) for item in recent_dispatches],
         "recent_runtime_reports": [RuntimeReportRead.model_validate(item) for item in recent_runtime_reports],
+        "recent_super_grok_prompts": [SuperGrokPromptRead.model_validate(item) for item in recent_super_grok_prompts],
         "monthly_cost_usd": costs,
         "budgets": {
             "claude": {

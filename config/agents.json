@@ -1,33 +1,29 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "orchestrator": {
     "role": "orchestrator",
     "thread_id": "019f1116-edae-76b3-9c9c-97f5ea8d61f8",
     "thread_title": "게임 제작 통합 파이프라인 구축",
     "responsibilities": [
+      "사용자 직접 기획을 작업 지시서로 정리",
       "작업 생성 및 배정",
       "상태 추적과 재시도",
-      "중앙 QA",
+      "무료 로컬 QA 실행",
       "사용자 승인 요청",
       "승인된 결과만 다음 단계로 전달"
     ]
   },
+  "planning": {
+    "mode": "user_direct",
+    "owner": "user",
+    "description": "기획과 자료조사는 사용자가 직접 수행하고, PM은 사용자가 준 내용을 작업 지시서로 정리한다."
+  },
+  "qa": {
+    "mode": "free_local_tools",
+    "owner": "local_hub",
+    "description": "반복 검사는 외부 AI API를 호출하지 않고 로컬 Sprite QA와 런타임 보고서 등록으로 처리한다."
+  },
   "workers": [
-    {
-      "role": "planning_research",
-      "thread_id": "TODO_CREATE_GAME_PLANNING_THREAD",
-      "thread_title": "게임 개발 기획",
-      "cwd": "C:\\Users\\kukl3\\Documents\\게임 개발 프로젝트",
-      "accepts": [
-        "game_concept",
-        "market_research",
-        "system_design",
-        "worldbuilding",
-        "content_planning",
-        "economy_design"
-      ],
-      "requires_user_approval": true
-    },
     {
       "role": "design_orchestra",
       "thread_id": "019f01d6-66f5-7620-9eec-585ce9d2285a",
@@ -45,5 +41,5 @@
       "requires_status": ["QA_PASS", "APPROVED"]
     }
   ],
-  "handoff_rule": "orchestrator -> planning_research -> design_orchestra -> QA -> user_approval -> game_development"
+  "handoff_rule": "user_direct_planning -> orchestrator -> design_orchestra -> local_free_qa -> user_approval -> game_development"
 }

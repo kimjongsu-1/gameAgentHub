@@ -12,7 +12,7 @@
       <div>
         <p class="eyebrow">GAME PRODUCTION CONTROL HUB</p>
         <h1>게임 제작 통합 허브</h1>
-        <p class="subtitle">디자인부터 Unity 적용까지, 승인된 결과만 다음 단계로 보냅니다.</p>
+        <p class="subtitle">사용자 직접 기획, 디자인 제작, 무료 로컬 QA, 사용자 승인, Unity 적용을 한곳에서 관리합니다.</p>
       </div>
       <span id="health" class="health">확인 중</span>
     </header>
@@ -22,15 +22,17 @@
     <section class="pipeline panel">
       <h2>제작 파이프라인</h2>
       <div class="pipeline-row">
-        <article><span>01</span><strong>오케스트레이션</strong><small>작업 배정 · 중앙 QA</small></article>
+        <article><span>01</span><strong>사용자 직접 기획</strong><small>기획 · 자료조사 직접 입력</small></article>
         <b>→</b>
-        <article><span>02</span><strong>게임 개발 기획</strong><small>기획 · 자료조사</small></article>
+        <article><span>02</span><strong>총괄 PM 정리</strong><small>작업 지시서 · 배정</small></article>
         <b>→</b>
-        <article><span>03</span><strong>게임 개발 디자인</strong><small>디자인 · 16프레임</small></article>
+        <article><span>03</span><strong>게임 개발 디자인</strong><small>캐릭터 · 16프레임</small></article>
         <b>→</b>
-        <article><span>04</span><strong>사용자 승인</strong><small>최종 선택</small></article>
+        <article><span>04</span><strong>무료 로컬 반복 QA</strong><small>Sprite QA · GIF · 런타임 보고</small></article>
         <b>→</b>
-        <article><span>05</span><strong>게임개발</strong><small>Unity 적용 · 런타임 QA</small></article>
+        <article><span>05</span><strong>사용자 승인</strong><small>최종 선택</small></article>
+        <b>→</b>
+        <article><span>06</span><strong>게임개발</strong><small>허가 후 Unity 적용</small></article>
       </div>
       <div id="pipeline-status" class="pipeline-status"></div>
     </section>
@@ -60,6 +62,12 @@
     <section class="panel pm-panel">
       <h2>MCP 총괄 PM 라우팅</h2>
       <div id="pm-routing" class="pm-routing"></div>
+    </section>
+
+    <section class="panel super-grok-panel">
+      <div class="section-title"><h2>SuperGrok 애니메이션/컷신 요청 패키지</h2><span id="super-grok-count" class="badge">0</span></div>
+      <p class="subtitle">외부 API를 호출하지 않고, 캐릭터 이미지 1장과 복사용 프롬프트만 준비합니다.</p>
+      <div id="super-grok-prompts" class="list empty">생성된 SuperGrok 요청 패키지가 없습니다.</div>
     </section>
 
     <section class="panel">

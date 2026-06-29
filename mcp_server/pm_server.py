@@ -71,12 +71,12 @@ def tool_schema() -> list[dict[str, Any]]:
         },
         {
             "name": "list_workers",
-            "description": "Return configured PM workers, including planning, design, and game development roles.",
+            "description": "Return configured PM workers. Planning is user-direct; configured workers handle design and game development.",
             "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         },
         {
             "name": "create_pipeline_task",
-            "description": "Create a PM-managed task for planning, design, or game development.",
+            "description": "Create a PM-managed task for design or game development. Planning/research input is provided directly by the user.",
             "inputSchema": {
                 "type": "object",
                 "required": ["title", "task_type", "assignee_role"],
@@ -187,6 +187,28 @@ def tool_schema() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "create_super_grok_animation_prompt",
+            "description": "Create a dashboard-visible manual SuperGrok package with one character image and a copy-ready animation/cutscene prompt. This never calls an external API.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["title", "animation_goal"],
+                "properties": {
+                    "title": {"type": "string"},
+                    "request_type": {"type": "string", "enum": ["skill_animation", "cutscene"], "default": "skill_animation"},
+                    "reference_image_path": {"type": "string"},
+                    "asset_id": {"type": "string"},
+                    "source_task_id": {"type": "string"},
+                    "character_name": {"type": "string"},
+                    "animation_goal": {"type": "string"},
+                    "style_notes": {"type": "string"},
+                    "duration_seconds": {"type": "number", "default": 3.0},
+                    "aspect_ratio": {"type": "string", "default": "1:1"},
+                    "created_by": {"type": "string", "default": "mcp_pm"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "get_gateway_policy",
             "description": "Return external AI call policy, provider budgets, and current monthly usage.",
             "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -248,6 +270,21 @@ def call_tool(
                 "capture_paths": arguments.get("capture_paths", []),
             },
         ).body
+    if name == "create_super_grok_animation_prompt":
+        payload = {
+            "title": arguments["title"],
+            "request_type": arguments.get("request_type", "skill_animation"),
+            "reference_image_path": arguments.get("reference_image_path"),
+            "asset_id": arguments.get("asset_id"),
+            "source_task_id": arguments.get("source_task_id"),
+            "character_name": arguments.get("character_name"),
+            "animation_goal": arguments["animation_goal"],
+            "style_notes": arguments.get("style_notes"),
+            "duration_seconds": arguments.get("duration_seconds", 3.0),
+            "aspect_ratio": arguments.get("aspect_ratio", "1:1"),
+            "created_by": arguments.get("created_by", "mcp_pm"),
+        }
+        return hub_request("POST", "/api/super-grok/animation-prompts", payload).body
     if name == "get_gateway_policy":
         return hub_request("GET", "/api/gateway/policy", None).body
     raise MCPToolError(f"Unknown MCP tool: {name}")

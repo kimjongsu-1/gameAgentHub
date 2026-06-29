@@ -62,6 +62,18 @@ docker compose exec api python -m app.sprite_qa `
 
 Unity 쪽 Import 결과 JSON과 캡처를 `08_runtime_captures`로 가져온 뒤 `/api/runtime-reports`에 등록하면 해당 게임 작업이 `RUNTIME_QA` 또는 `REVISION_REQUIRED`로 변경됩니다.
 
+## SuperGrok 수동 애니메이션/컷신 패키지
+
+Grok/xAI API를 호출하지 않고, 사용자가 SuperGrok에 직접 넣을 수 있는 요청 패키지를 만들 수 있습니다.
+
+- API: `POST /api/super-grok/animation-prompts`
+- MCP PM tool: `create_super_grok_animation_prompt`
+- 입력: 캐릭터 이미지 1장, 애니메이션/컷신 목표, 스타일 메모
+- 출력: 대시보드 카드, 복사용 프롬프트, 네거티브 프롬프트, JSON/Markdown 패키지
+- 저장 위치: `07_cinematics/work/super_grok_requests`
+
+이 흐름은 외부 AI API를 자동 호출하지 않습니다. PM이 필요하다고 판단하면 대시보드에 패키지만 만들고, 사용자가 SuperGrok에 이미지와 프롬프트를 직접 넣는 방식입니다.
+
 ## 실행
 
 Docker Desktop이 실행된 상태에서:
@@ -104,7 +116,7 @@ python -m pytest -q
 ## 담당 채팅
 
 - 총괄: 현재 `통합 제작 파이프라인 구축`
-- 기획·자료조사: `게임 개발 기획`
+- 기획·자료조사: 사용자가 직접 수행
 - 디자인·16프레임: 기존 `게임 개발 디자인`
 - Unity 구현: 기존 `게임개발`
 
@@ -122,6 +134,23 @@ python -m mcp_server.pm_server
 자세한 내용은 [docs/MCP_PM_SERVER.md](docs/MCP_PM_SERVER.md)를 참고합니다.
 
 PM이 채팅창으로 지시하는 구조는 [docs/PM_ROUTING_ARCHITECTURE.md](docs/PM_ROUTING_ARCHITECTURE.md)에 정리되어 있습니다. 요약하면 MCP PM이 허브에 dispatch 지시서를 만들고, Codex dispatcher가 기존 채팅창으로 prompt를 전달합니다.
+
+## 현재 공식 운영 구조
+
+```text
+사용자 직접 기획
+→ 총괄 PM 작업 지시서 정리
+→ 게임 개발 디자인
+→ 무료 로컬 반복 QA
+→ 사용자 승인
+→ 게임개발
+```
+
+- 기획/자료조사 전용 worker는 제거되었다.
+- 기획과 자료조사는 사용자가 직접 수행한다.
+- 반복 검사는 무료 로컬 Sprite QA와 런타임 보고서 등록을 우선 사용한다.
+- 외부 AI API는 기본 차단한다.
+- 게임개발은 사용자가 명시적으로 시작을 허가하기 전까지 진행하지 않는다.
 
 ## 안전 원칙
 

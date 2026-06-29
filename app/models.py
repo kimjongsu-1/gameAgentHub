@@ -138,3 +138,22 @@ class RuntimeReport(Base):
     capture_paths: Mapped[list] = mapped_column(JSON, default=list)
     report_payload: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+
+
+class SuperGrokPromptPackage(Base):
+    __tablename__ = "super_grok_prompt_packages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    source_task_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    asset_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(200), index=True)
+    request_type: Mapped[str] = mapped_column(String(80), default="skill_animation", index=True)
+    status: Mapped[str] = mapped_column(String(30), default="READY", index=True)
+    reference_image_path: Mapped[str] = mapped_column(Text)
+    prompt: Mapped[str] = mapped_column(Text)
+    negative_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    package_path: Mapped[str] = mapped_column(Text)
+    package_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str] = mapped_column(String(80), default="pm")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)

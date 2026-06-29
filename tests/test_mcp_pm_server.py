@@ -16,22 +16,23 @@ def test_mcp_lists_pm_tools():
     assert "pause_pipeline_role" in names
     assert "resume_pipeline_role" in names
     assert "register_runtime_report" in names
+    assert "create_super_grok_animation_prompt" in names
 
 
 def test_mcp_create_pipeline_task_calls_hub():
     result = call_tool(
         "create_pipeline_task",
         {
-            "title": "시장 조사",
-            "task_type": "market_research",
-            "assignee_role": "planning_research",
-            "input_payload": {"topic": "idle RPG"},
+            "title": "주인공 16프레임 제작",
+            "task_type": "sprite_16_frame",
+            "assignee_role": "design_orchestra",
+            "input_payload": {"user_planning": "idle RPG hero"},
         },
         hub_request=fake_hub,
     )
     assert result["method"] == "POST"
     assert result["path"] == "/api/tasks"
-    assert result["payload"]["assignee_role"] == "planning_research"
+    assert result["payload"]["assignee_role"] == "design_orchestra"
 
 
 def test_mcp_jsonrpc_tools_call_result():
@@ -61,3 +62,20 @@ def test_mcp_pm_routing_architecture_calls_hub():
     result = call_tool("get_pm_routing_architecture", {}, hub_request=fake_hub)
     assert result["method"] == "GET"
     assert result["path"] == "/api/pipeline/architecture"
+
+
+def test_mcp_create_super_grok_animation_prompt_calls_hub():
+    result = call_tool(
+        "create_super_grok_animation_prompt",
+        {
+            "title": "Hero skill animation",
+            "reference_image_path": "03_character_masters/hero.png",
+            "character_name": "Hero",
+            "animation_goal": "A short sword slash skill animation.",
+        },
+        hub_request=fake_hub,
+    )
+    assert result["method"] == "POST"
+    assert result["path"] == "/api/super-grok/animation-prompts"
+    assert result["payload"]["created_by"] == "mcp_pm"
+    assert result["payload"]["animation_goal"] == "A short sword slash skill animation."

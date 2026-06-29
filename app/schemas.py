@@ -187,3 +187,36 @@ class RuntimeReportRead(RuntimeReportCreate):
     status: str
     report_payload: dict[str, Any]
     created_at: datetime
+
+
+class SuperGrokPromptCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    request_type: Literal["skill_animation", "cutscene"] = "skill_animation"
+    reference_image_path: str | None = None
+    asset_id: str | None = None
+    source_task_id: str | None = None
+    character_name: str | None = None
+    animation_goal: str = Field(min_length=1, max_length=500)
+    style_notes: str | None = None
+    duration_seconds: float = Field(default=3.0, gt=0, le=30)
+    aspect_ratio: str = "1:1"
+    created_by: str = "pm"
+
+
+class SuperGrokPromptRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    source_task_id: str | None
+    asset_id: str | None
+    title: str
+    request_type: str
+    status: str
+    reference_image_path: str
+    prompt: str
+    negative_prompt: str | None
+    package_path: str
+    package_payload: dict[str, Any]
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
