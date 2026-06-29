@@ -1,0 +1,74 @@
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+def test_health_and_agents():
+    with TestClient(app) as client:
+        assert client.get("/health").json()["status"] == "ok"
+        agents = client.get("/api/agents").json()
+        assert agents["orchestrator"]["thread_title"] == "통합 제작 파이프라인 구축"
+        assert {worker["role"] for worker in agents["workers"]} == {
+            "design_orchestra",
+            "game_development",
+        }
+
+
+def test_task_approval_flow():
+    with TestClient(app) as client:
+        task = client.post(
+            "/api/tasks",
+            json={
+                "title": "두억시니 걷기 모션",
+                "task_type": "sprite_16_frame",
+                "assignee_role": "design_orchestra",
+                "input_payload": {"frame_count": 16},
+            },
+        )
+        assert task.status_code == 201
+        task_id = task.json()["id"]
+
+        approval = client.post(
+            "/api/approvals",
+            json={
+                "task_id": task_id,
+                "approval_type": "SPRITE_GIF",
+                "summary": "16프레임 걷기 모션 검토",
+                "preview_paths": ["05_sprites/qa/preview.gif"],
+            },
+        )
+        assert approval.status_code == 201
+        assert client.get("/api/tasks").json()[0]["status"] == "WAITING_USER_APPROVAL"
+
+        decision = client.post(
+            f"/api/approvals/{approval.json()['id']}/decision",
+            json={"decision": "APPROVED", "decided_by": "user"},
+        )
+        assert decision.status_code == 200
+        assert decision.json()["status"] == "APPROVED"
+        assert client.get("/api/tasks").json()[0]["status"] == "APPROVED"
+
+
+def test_asset_uniqueness():
+    asset = {
+        "asset_id": "CHR_DUEOKSINI_WALK_001",
+        "asset_type": "SPRITE_SHEET",
+        "character_version": "dueoksini_v01",
+        "style_version": "art_bible_v01",
+        "source_asset": "master.png",
+        "file_path": "05_sprites/work/walk.png",
+        "frame_count": 16,
+        "fps": 12,
+        "loop": True,
+        "pivot": {"x": 0.5, "y": 0.0},
+        "status": "QA_PASS",
+        "checksum": "sha256:example",
+        "created_by": "design_orchestra",
+        "metadata": {"direction": "left"},
+    }
+    with TestClient(app) as client:
+        assert client.post("/api/assets", json=asset).status_code == 201
+        assert client.post("/api/assets", json=asset).status_code == 409
+        saved = client.get("/api/assets").json()[0]
+        assert saved["frame_count"] == 16
+        assert saved["metadata"]["direction"] == "left"

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "unity-import-request.schema.json",
+  "title": "Approved Unity Sprite Import Request",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "asset_id",
+    "status",
+    "qa_status",
+    "source_file",
+    "resource_name",
+    "columns",
+    "rows",
+    "frame_count",
+    "fps",
+    "loop",
+    "pixels_per_unit",
+    "pivot"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "asset_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+    "status": {"const": "APPROVED"},
+    "qa_status": {"const": "PASS"},
+    "source_file": {"type": "string"},
+    "resource_name": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
+    "columns": {"type": "integer", "minimum": 1, "maximum": 32},
+    "rows": {"type": "integer", "minimum": 1, "maximum": 32},
+    "frame_count": {"type": "integer", "minimum": 1, "maximum": 256},
+    "fps": {"type": "number", "exclusiveMinimum": 0, "maximum": 120},
+    "loop": {"type": "boolean"},
+    "pixels_per_unit": {"type": "number", "exclusiveMinimum": 0},
+    "pivot": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": {"type": "number", "minimum": 0, "maximum": 1},
+        "y": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": false
+    },
+    "source_checksum": {"type": "string"},
+    "character_version": {"type": "string"},
+    "style_version": {"type": "string"}
+  },
+  "additionalProperties": false
+}

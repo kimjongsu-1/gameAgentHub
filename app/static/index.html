@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>게임 제작 통합 허브</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">GAME PRODUCTION CONTROL HUB</p>
+        <h1>게임 제작 통합 허브</h1>
+        <p class="subtitle">디자인부터 Unity 적용까지, 승인된 결과만 다음 단계로 보냅니다.</p>
+      </div>
+      <span id="health" class="health">확인 중</span>
+    </header>
+
+    <section id="summary" class="summary"></section>
+
+    <section class="pipeline panel">
+      <h2>제작 파이프라인</h2>
+      <div class="pipeline-row">
+        <article><span>01</span><strong>오케스트레이터</strong><small>작업 배정·중앙 QA</small></article>
+        <b>→</b>
+        <article><span>02</span><strong>게임 개발 디자인</strong><small>디자인·16프레임</small></article>
+        <b>→</b>
+        <article><span>03</span><strong>사용자 승인</strong><small>최종 선택</small></article>
+        <b>→</b>
+        <article><span>04</span><strong>게임개발</strong><small>Unity 적용·런타임 QA</small></article>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="section-title"><h2>최근 작업</h2><button onclick="loadDashboard()">새로고침</button></div>
+        <div id="tasks" class="list empty">등록된 작업이 없습니다.</div>
+      </section>
+      <section class="panel">
+        <div class="section-title"><h2>승인 대기</h2><span id="approval-count" class="badge">0</span></div>
+        <div id="approvals" class="list empty">승인 요청이 없습니다.</div>
+      </section>
+    </div>
+
+    <div class="grid queue-grid">
+      <section class="panel dispatch-panel">
+        <div class="section-title"><h2>채팅 전달 큐</h2><span id="dispatch-count" class="badge">0</span></div>
+        <div id="dispatches" class="list empty">전달 대기 작업이 없습니다.</div>
+      </section>
+      <section class="panel runtime-panel">
+        <div class="section-title"><h2>Unity 런타임 QA</h2><span id="runtime-count" class="badge">0</span></div>
+        <div id="runtime-reports" class="list empty">런타임 보고서가 없습니다.</div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>월간 API 비용</h2>
+      <div id="costs" class="costs"></div>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

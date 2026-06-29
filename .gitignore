@@ -1,0 +1,30 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+data/*.db
+data/*.db-*
+postgres_data/
+*.log
+.DS_Store
+Thumbs.db
+
+# Runtime handoff queue records contain machine-local paths.
+00_control/pipeline/outbox/*
+!00_control/pipeline/outbox/.gitkeep
+
+# Large generated assets are tracked by manifest, not by Git.
+04_concepts/work/*
+05_sprites/work/*
+05_sprites/qa/*
+07_cinematics/work/*
+08_runtime_captures/*
+!04_concepts/work/.gitkeep
+!05_sprites/work/.gitkeep
+!05_sprites/qa/.gitkeep
+!07_cinematics/work/.gitkeep
+!08_runtime_captures/.gitkeep

@@ -1,0 +1,45 @@
+name: game-production-hub
+
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-gamehub}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-gamehub}
+      CLAUDE_MONTHLY_BUDGET_USD: ${CLAUDE_MONTHLY_BUDGET_USD:-10}
+      CLAUDE_SOFT_LIMIT_USD: ${CLAUDE_SOFT_LIMIT_USD:-8}
+      CLAUDE_STOP_LIMIT_USD: ${CLAUDE_STOP_LIMIT_USD:-9}
+      OPENAI_MONTHLY_BUDGET_USD: ${OPENAI_MONTHLY_BUDGET_USD:-0}
+      WORKSPACE_ROOT: /workspace
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./config:/app/config:ro
+      - ./schemas:/app/schemas:ro
+      - ./:/workspace
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gamehub}
+      POSTGRES_USER: ${POSTGRES_USER:-gamehub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - gamehub_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gamehub} -d ${POSTGRES_DB:-gamehub}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  gamehub_postgres_data:

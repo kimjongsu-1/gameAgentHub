@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "orchestrator": {
+    "role": "orchestrator",
+    "thread_id": "019f1116-edae-76b3-9c9c-97f5ea8d61f8",
+    "thread_title": "통합 제작 파이프라인 구축",
+    "responsibilities": [
+      "작업 생성 및 배정",
+      "상태 추적과 재시도",
+      "중앙 QA",
+      "사용자 승인 요청",
+      "승인된 결과의 다음 단계 전달"
+    ]
+  },
+  "workers": [
+    {
+      "role": "design_orchestra",
+      "thread_id": "019f01d6-66f5-7620-9eec-585ce9d2285a",
+      "thread_title": "게임 개발 디자인",
+      "cwd": "C:\\Users\\kukl3\\Documents\\Codex\\2026-06-26\\ai-4-10-ai-ai-gemini",
+      "accepts": ["character_design", "sprite_16_frame", "animation_source"],
+      "requires_user_approval": true
+    },
+    {
+      "role": "game_development",
+      "thread_id": "019f03c3-a01d-7ca3-bfc7-f35536ea8f38",
+      "thread_title": "게임개발",
+      "cwd": "C:\\game\\character_pipeline\\IdleBattleUnity",
+      "accepts": ["unity_integration", "runtime_qa", "android_build"],
+      "requires_status": ["QA_PASS", "APPROVED"]
+    }
+  ],
+  "handoff_rule": "orchestrator -> design_orchestra -> QA -> user_approval -> game_development"
+}

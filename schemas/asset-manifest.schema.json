@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "asset-manifest.schema.json",
+  "title": "Game Production Asset Manifest",
+  "type": "object",
+  "required": [
+    "asset_id",
+    "asset_type",
+    "character_version",
+    "style_version",
+    "source_asset",
+    "file_path",
+    "status",
+    "checksum",
+    "created_by"
+  ],
+  "properties": {
+    "asset_id": {"type": "string", "minLength": 1},
+    "asset_type": {
+      "enum": ["CHARACTER_MASTER", "SPRITE_SHEET", "GIF_PREVIEW", "GAME_ASSET", "CINEMATIC", "REPORT"]
+    },
+    "character_version": {"type": "string"},
+    "style_version": {"type": "string"},
+    "source_asset": {"type": "string"},
+    "file_path": {"type": "string"},
+    "frame_count": {"type": ["integer", "null"], "minimum": 1},
+    "fps": {"type": ["number", "null"], "exclusiveMinimum": 0},
+    "loop": {"type": ["boolean", "null"]},
+    "pivot": {
+      "type": ["object", "null"],
+      "required": ["x", "y"],
+      "properties": {
+        "x": {"type": "number"},
+        "y": {"type": "number"}
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "enum": ["WORKING", "QA_RUNNING", "QA_PASS", "REVISION_REQUIRED", "APPROVED", "REJECTED", "INTEGRATED"]
+    },
+    "checksum": {"type": "string"},
+    "created_by": {"type": "string"},
+    "approved_by": {"type": ["string", "null"]},
+    "metadata": {"type": "object"}
+  },
+  "additionalProperties": false
+}
