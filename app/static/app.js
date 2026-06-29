@@ -47,6 +47,30 @@ function pipelineStageRow(stage) {
   </div>`;
 }
 
+function pmRoutingView(routing) {
+  if (!routing) return `<p class="subtitle">PM 라우팅 상태를 불러올 수 없습니다.</p>`;
+  const flow = (routing.flow || [])
+    .map((item) => `<li><strong>${escapeHtml(item.owner)}</strong><span>${escapeHtml(item.action)}</span></li>`)
+    .join("");
+  const next = (routing.next_required_connections || [])
+    .filter((item) => item.needed)
+    .map((item) => `<li><strong>${escapeHtml(item.role)}</strong><span>${escapeHtml(item.action)}</span></li>`)
+    .join("") || `<li><strong>필수 연결</strong><span>현재 추가 필수 연결 없음</span></li>`;
+  const badges = [
+    ["PM", routing.pm_owner],
+    ["전달 방식", routing.dispatcher_mode === "manual" ? "수동" : routing.dispatcher_mode],
+    ["Dispatcher", routing.dispatcher_status],
+    ["기획 연결", routing.planning_connected ? "완료" : "필요"],
+    ["게임개발", routing.game_development_locked ? "중지됨" : "재개 가능"],
+  ];
+  return `<div class="pm-badges">${badges.map(([name, value]) => `<div><small>${escapeHtml(name)}</small><strong>${escapeHtml(value)}</strong></div>`).join("")}</div>
+    <p class="subtitle">${escapeHtml(routing.routing_model)}</p>
+    <div class="pm-columns">
+      <div><h3>지시 흐름</h3><ol>${flow}</ol></div>
+      <div><h3>남은 연결</h3><ol>${next}</ol></div>
+    </div>`;
+}
+
 function escapeHtml(value) {
   const node = document.createElement("div");
   node.textContent = value ?? "";
@@ -78,6 +102,7 @@ async function loadDashboard() {
     el("pipeline-status").innerHTML = stages.length
       ? stages.map(pipelineStageRow).join("")
       : `<p class="subtitle">파이프라인 상태를 불러올 수 없습니다.</p>`;
+    el("pm-routing").innerHTML = pmRoutingView(data.pm_routing);
 
     el("tasks").className = data.recent_tasks.length ? "list" : "list empty";
     el("tasks").innerHTML = data.recent_tasks.length ? data.recent_tasks.map(taskRow).join("") : "등록된 작업이 없습니다.";
@@ -101,7 +126,7 @@ async function loadDashboard() {
       const hard = Number(data.budgets[provider]?.hard || 0);
       return `<div class="cost-card"><small>${provider.toUpperCase()}</small><strong>$${spent.toFixed(2)}</strong><span class="subtitle">한도 ${hard ? `$${hard.toFixed(2)}` : "미설정"}</span></div>`;
     }).join("");
-    el("gateway").innerHTML = `<p class="subtitle">Gateway: ${gateway.external_calls_enabled ? "외부 호출 허용" : "외부 호출 차단"} · 기본 정책 ${gateway.default_policy} · MCP: game_production_pm</p>`;
+    el("gateway").innerHTML = `<p class="subtitle">Gateway: ${gateway.external_calls_enabled ? "외부 호출 허용" : "외부 호출 차단"} · 기본 정책 ${gateway.default_policy} · 외부 AI 호출은 PM 승인 전 차단</p>`;
   } catch (error) {
     el("health").textContent = "연결 실패";
     el("health").className = "health";

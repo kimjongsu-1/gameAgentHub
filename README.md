@@ -121,6 +121,8 @@ python -m mcp_server.pm_server
 
 자세한 내용은 [docs/MCP_PM_SERVER.md](docs/MCP_PM_SERVER.md)를 참고합니다.
 
+PM이 채팅창으로 지시하는 구조는 [docs/PM_ROUTING_ARCHITECTURE.md](docs/PM_ROUTING_ARCHITECTURE.md)에 정리되어 있습니다. 요약하면 MCP PM이 허브에 dispatch 지시서를 만들고, Codex dispatcher가 기존 채팅창으로 prompt를 전달합니다.
+
 ## 안전 원칙
 
 - API 키는 `.env`에만 두고 Git에 올리지 않습니다.

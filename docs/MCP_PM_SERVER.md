@@ -18,6 +18,7 @@ python -m mcp_server.pm_server
 
 - `get_pipeline_status`
 - `get_pipeline_controls`
+- `get_pm_routing_architecture`
 - `list_workers`
 - `create_pipeline_task`
 - `create_handoff_package`

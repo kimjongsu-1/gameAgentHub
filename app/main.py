@@ -86,6 +86,42 @@ def pipeline_stage_status(db: Session) -> list[dict]:
     return stages
 
 
+def pipeline_architecture_status(db: Session) -> dict:
+    stages = pipeline_stage_status(db)
+    planning_stage = next((stage for stage in stages if stage["role"] == "planning_research"), None)
+    game_stage = next((stage for stage in stages if stage["role"] == "game_development"), None)
+    return {
+        "pm_owner": "MCP server: game_production_pm",
+        "hub_role": "FastAPI dashboard, DB, approval, QA, dispatch queue, runtime report storage",
+        "routing_model": "MCP PM creates/updates tasks and dispatch records; Codex dispatcher sends approved dispatch prompts to existing worker chats.",
+        "dispatcher_mode": "manual",
+        "dispatcher_status": "disabled_until_user_requests",
+        "external_ai_policy": settings.gateway_default_policy,
+        "external_ai_calls_enabled": settings.external_ai_calls_enabled,
+        "game_development_locked": bool(game_stage and game_stage["paused"]),
+        "planning_connected": bool(planning_stage and planning_stage["configured"]),
+        "next_required_connections": [
+            {
+                "role": "planning_research",
+                "needed": not bool(planning_stage and planning_stage["configured"]),
+                "action": "게임 개발 기획 채팅의 thread_id를 config/agents.json에 등록",
+            },
+            {
+                "role": "dispatcher",
+                "needed": True,
+                "action": "사용자가 원할 때만 수동 dispatch 처리 또는 자동화 재활성화",
+            },
+        ],
+        "flow": [
+            {"step": 1, "owner": "MCP PM", "action": "작업 생성/상태 조회/중지·재개 제어"},
+            {"step": 2, "owner": "FastAPI Hub", "action": "DB 저장, 승인/QA/dispatch 큐 관리"},
+            {"step": 3, "owner": "Codex Dispatcher", "action": "승인된 dispatch를 기존 채팅창으로 전달"},
+            {"step": 4, "owner": "Worker Chat", "action": "기획/디자인/개발 작업 수행"},
+            {"step": 5, "owner": "FastAPI Hub", "action": "결과 보고서와 승인 상태 회수"},
+        ],
+    }
+
+
 def resolve_workspace_path(value: str) -> Path:
     root = settings.resolved_workspace_root
     candidate = Path(value)
@@ -478,7 +514,13 @@ def pipeline_status(db: Session = Depends(get_db)) -> dict:
             "registered_in_codex_config": True,
             "hub_url": "http://127.0.0.1:8000",
         },
+        "architecture": pipeline_architecture_status(db),
     }
+
+
+@app.get("/api/pipeline/architecture")
+def pipeline_architecture(db: Session = Depends(get_db)) -> dict:
+    return pipeline_architecture_status(db)
 
 
 @app.post("/api/dispatches/{dispatch_id}/retry", response_model=DispatchRead)
@@ -644,6 +686,7 @@ def dashboard_data(db: Session = Depends(get_db)) -> dict:
         "dispatch_counts": dispatch_counts,
         "runtime_counts": runtime_counts,
         "pipeline_stages": pipeline_stage_status(db),
+        "pm_routing": pipeline_architecture_status(db),
         "recent_tasks": [TaskRead.model_validate(task) for task in tasks],
         "pending_approvals": [ApprovalRead.model_validate(item) for item in pending],
         "recent_dispatches": [DispatchRead.model_validate(item) for item in recent_dispatches],

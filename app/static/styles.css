@@ -62,6 +62,16 @@ button:disabled { opacity: .45; cursor: wait; }
 .approval-actions .approve { color: var(--cyan); border-color: rgba(65,217,199,.5); }
 .approval-actions .reject { color: var(--red); border-color: rgba(255,107,107,.45); }
 .queue-grid { grid-template-columns: 1fr 1fr; }
+.pm-panel { margin-bottom: 12px; }
+.pm-routing { display: grid; gap: 14px; margin-top: 16px; }
+.pm-badges { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.pm-badges div { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: rgba(255,255,255,.025); }
+.pm-badges small { display: block; margin-bottom: 5px; }
+.pm-badges strong { font-size: .9rem; }
+.pm-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pm-columns h3 { margin: 0 0 10px; font-size: .92rem; }
+.pm-columns ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+.pm-columns li span { display: block; color: var(--muted); font-size: .82rem; margin-top: 3px; }
 .costs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 18px; }
 .cost-card { border-left: 3px solid var(--cyan); padding: 4px 14px; }
 .cost-card strong { display: block; font-size: 1.4rem; margin-top: 3px; }
@@ -70,5 +80,6 @@ button:disabled { opacity: .45; cursor: wait; }
   .summary, .grid, .costs { grid-template-columns: 1fr 1fr; }
   .pipeline-row { align-items: stretch; flex-direction: column; }
   .pipeline-row > b { transform: rotate(90deg); align-self: center; }
+  .pm-columns { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) { .summary, .grid, .costs { grid-template-columns: 1fr; } }

@@ -135,6 +135,8 @@ def test_pipeline_status_and_role_pause_resume():
 
         status = client.get("/api/pipeline/status").json()
         assert status["paused_tasks"] >= 1
+        assert status["architecture"]["dispatcher_mode"] == "manual"
+        assert status["architecture"]["game_development_locked"] is True
         assert any(stage["role"] == "planning_research" and not stage["configured"] for stage in status["stages"])
 
         resumed = client.post("/api/pipeline/roles/game_development/resume")
@@ -156,3 +158,14 @@ def test_unconfigured_planning_worker_cannot_dispatch():
         response = client.post(f"/api/tasks/{task['id']}/queue-dispatch")
         assert response.status_code == 422
         assert "not configured" in response.json()["detail"]
+
+
+def test_pipeline_architecture_documents_pm_routing():
+    with TestClient(app) as client:
+        response = client.get("/api/pipeline/architecture")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["pm_owner"] == "MCP server: game_production_pm"
+        assert "dispatch records" in data["routing_model"]
+        assert data["dispatcher_status"] == "disabled_until_user_requests"
+        assert data["planning_connected"] is False

@@ -65,6 +65,11 @@ def tool_schema() -> list[dict[str, Any]]:
             "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         },
         {
+            "name": "get_pm_routing_architecture",
+            "description": "Explain how the MCP PM, FastAPI hub, dispatcher, and Codex worker chats are connected.",
+            "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+        {
             "name": "list_workers",
             "description": "Return configured PM workers, including planning, design, and game development roles.",
             "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -198,6 +203,8 @@ def call_tool(
         return hub_request("GET", "/api/dashboard", None).body
     if name == "get_pipeline_controls":
         return hub_request("GET", "/api/pipeline/status", None).body
+    if name == "get_pm_routing_architecture":
+        return hub_request("GET", "/api/pipeline/architecture", None).body
     if name == "list_workers":
         return hub_request("GET", "/api/agents", None).body
     if name == "create_pipeline_task":

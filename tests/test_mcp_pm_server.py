@@ -12,6 +12,7 @@ def test_mcp_lists_pm_tools():
     assert "create_pipeline_task" in names
     assert "get_pipeline_status" in names
     assert "get_pipeline_controls" in names
+    assert "get_pm_routing_architecture" in names
     assert "pause_pipeline_role" in names
     assert "resume_pipeline_role" in names
     assert "register_runtime_report" in names
@@ -54,3 +55,9 @@ def test_mcp_pause_role_calls_hub():
     )
     assert result["method"] == "POST"
     assert result["path"] == "/api/pipeline/roles/game_development/pause?reason=manual%20stop"
+
+
+def test_mcp_pm_routing_architecture_calls_hub():
+    result = call_tool("get_pm_routing_architecture", {}, hub_request=fake_hub)
+    assert result["method"] == "GET"
+    assert result["path"] == "/api/pipeline/architecture"
