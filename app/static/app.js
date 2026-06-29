@@ -209,7 +209,7 @@ async function createCharacterConsistencyTest(form) {
   result.innerHTML = `<p class="subtitle">업로드와 큐 생성을 진행 중입니다...</p>`;
   button.disabled = true;
   try {
-    const response = await fetch("/api/design/character-consistency-tests", {
+    const response = await fetch("/api/design/consistency-tests", {
       method: "POST",
       body: new FormData(form),
     });
@@ -220,7 +220,7 @@ async function createCharacterConsistencyTest(form) {
     result.innerHTML = `<div class="row">
       <strong>통일성 테스트 큐 생성 완료</strong>
       <span class="status">${escapeHtml(payload.dispatch.status)}</span>
-      <small>작업 ${escapeHtml(payload.task.id)} · 참조 이미지 ${escapeHtml(payload.reference_image_path)}</small>
+      <small>작업 ${escapeHtml(payload.task.id)} · ${escapeHtml(payload.task.task_type)} · 참조 이미지 ${escapeHtml(payload.reference_image_path)}</small>
     </div>`;
     form.reset();
     await loadDashboard();

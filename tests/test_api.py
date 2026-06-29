@@ -178,6 +178,37 @@ def test_character_consistency_upload_creates_design_dispatch():
         assert client.patch(f"/api/dispatches/{dispatch_id}", json={"status": "SENT"}).status_code == 200
 
 
+def test_design_consistency_upload_supports_monsters_maps_and_items():
+    cases = [
+        ("monster", "두억시니 졸개", "04_concepts/work/uploads/monsters/", "monster_consistency_test", "몬스터 종족"),
+        ("boss_monster", "두억시니 왕", "04_concepts/work/uploads/boss_monsters/", "boss_monster_consistency_test", "보스몬스터"),
+        ("map", "귀신 숲", "04_concepts/work/uploads/maps/", "map_consistency_test", "맵의 지형 구조"),
+        ("item", "화염 부적", "04_concepts/work/uploads/items/", "item_consistency_test", "아이템의 형태"),
+    ]
+    with TestClient(app) as client:
+        for asset_kind, asset_name, prefix, task_type, prompt_marker in cases:
+            response = client.post(
+                "/api/design/consistency-tests",
+                data={
+                    "asset_kind": asset_kind,
+                    "asset_name": asset_name,
+                    "notes": "업로드 참조와 같은 디자인으로 유지",
+                    "variants": "3",
+                },
+                files={"file": (f"{asset_kind}.png", valid_png_bytes(), "image/png")},
+            )
+            assert response.status_code == 201
+            payload = response.json()
+            assert payload["reference_image_path"].startswith(prefix)
+            assert payload["task"]["task_type"] == task_type
+            assert payload["task"]["assignee_role"] == "design_orchestra"
+            assert payload["dispatch"]["status"] == "PENDING"
+            assert prompt_marker in payload["handoff_package"]["prompt"]
+            dispatch_id = payload["dispatch"]["id"]
+            assert client.post(f"/api/dispatches/{dispatch_id}/claim").status_code == 200
+            assert client.patch(f"/api/dispatches/{dispatch_id}", json={"status": "SENT"}).status_code == 200
+
+
 def test_gateway_policy_blocks_external_calls_by_default():
     with TestClient(app) as client:
         policy = client.get("/api/gateway/policy").json()

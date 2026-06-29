@@ -359,6 +359,152 @@ def build_character_consistency_payload(
     }
 
 
+ASSET_KIND_LABELS = {
+    "character": "캐릭터",
+    "monster": "몬스터",
+    "boss_monster": "보스몬스터",
+    "map": "맵",
+    "item": "아이템",
+}
+
+UPLOAD_DIR_BY_KIND = {
+    "character": ("03_character_masters", "uploads"),
+    "monster": ("04_concepts", "work", "uploads", "monsters"),
+    "boss_monster": ("04_concepts", "work", "uploads", "boss_monsters"),
+    "map": ("04_concepts", "work", "uploads", "maps"),
+    "item": ("04_concepts", "work", "uploads", "items"),
+}
+
+CONSISTENCY_REQUIREMENTS_BY_KIND = {
+    "character": [
+        "얼굴 비율, 눈매, 표정 인상 유지",
+        "체형, 키, 실루엣 유지",
+        "의상 구조, 장식, 색상 팔레트 유지",
+        "무기/소품의 형태와 위치 유지",
+        "머리카락/뿔/꼬리/문양 같은 식별 요소 유지",
+        "다른 캐릭터처럼 보이는 재해석 금지",
+        "16프레임 제작 시 발 기준점과 몸 중심 정렬 유지",
+    ],
+    "monster": [
+        "몬스터 종족, 실루엣, 덩치감 유지",
+        "얼굴, 눈, 입, 뿔, 발톱, 꼬리 같은 식별 요소 유지",
+        "피부, 털, 갑각, 문양, 상처, 색상 팔레트 유지",
+        "일반 몬스터 등급에 맞는 과도하지 않은 장식 유지",
+        "다른 몬스터처럼 보이는 재해석 금지",
+        "16프레임 제작 시 발 기준점과 몸 중심 정렬 유지",
+    ],
+    "boss_monster": [
+        "보스몬스터의 압도적인 실루엣과 크기감 유지",
+        "핵심 얼굴, 뿔, 왕관, 날개, 꼬리, 무기, 장식 요소 유지",
+        "보스 전용 색상 팔레트와 위협적인 분위기 유지",
+        "일반 몬스터처럼 약하게 단순화 금지",
+        "페이즈/스킬 변형을 만들더라도 같은 보스로 인식되게 유지",
+        "16프레임 제작 시 발 기준점과 몸 중심 정렬 유지",
+    ],
+    "map": [
+        "맵의 지형 구조, 시점, 원근, 주요 랜드마크 유지",
+        "타일 크기, 길 폭, 장애물 배치, 이동 가능 영역의 일관성 유지",
+        "색상 팔레트, 조명 방향, 분위기 유지",
+        "반복 타일/배경으로 확장해도 경계가 튀지 않게 유지",
+        "다른 지역처럼 보이는 재해석 금지",
+        "게임 플레이 가독성을 해치는 디테일 과잉 금지",
+    ],
+    "item": [
+        "아이템의 형태, 실루엣, 색상, 재질감 유지",
+        "등급/희귀도 표현이 있다면 색 테두리와 이펙트 규칙 유지",
+        "무기, 장비, 소모품, 재료 등 용도 인식이 유지되게 제작",
+        "작은 아이콘 크기에서도 알아볼 수 있는 단순한 형태 유지",
+        "다른 아이템처럼 보이는 재해석 금지",
+        "아이콘/드롭/인벤토리 버전을 만들 때 같은 물건으로 인식되게 유지",
+    ],
+}
+
+
+def upload_dir_for_kind(asset_kind: str) -> Path:
+    parts = UPLOAD_DIR_BY_KIND.get(asset_kind)
+    if not parts:
+        raise HTTPException(422, detail=f"Unsupported asset_kind: {asset_kind}")
+    return settings.resolved_workspace_root.joinpath(*parts)
+
+
+def build_design_consistency_payload(
+    asset_kind: str,
+    asset_name: str,
+    reference_image_path: str,
+    notes: str,
+    variants: int,
+) -> dict:
+    label = ASSET_KIND_LABELS[asset_kind]
+    return {
+        "asset_kind": asset_kind,
+        "asset_kind_label": label,
+        "reference_image_path": reference_image_path,
+        "asset_name": asset_name,
+        "character_name": asset_name if asset_kind == "character" else None,
+        "user_notes": notes,
+        "requested_variants": variants,
+        "test_goal": f"참조 이미지 1장을 기준으로 {label} 디자인 정체성이 통일되게 유지되는지 확인한다.",
+        "consistency_requirements": CONSISTENCY_REQUIREMENTS_BY_KIND[asset_kind],
+        "requested_outputs": [
+            f"참조 이미지와 같은 {label}로 보이는 테스트 이미지 또는 시트",
+            "통일성 유지 체크리스트",
+            "바뀐 부분이 있다면 수정 필요 항목",
+        ],
+    }
+
+
+def create_design_consistency_records(
+    db: Session,
+    asset_kind: str,
+    asset_name: str,
+    reference_image_path: str,
+    notes: str,
+    variants: int,
+) -> dict:
+    try:
+        worker = find_worker(load_agents(), "design_orchestra")
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    if not worker_is_configured(worker):
+        raise HTTPException(422, detail="Worker thread is not configured for role: design_orchestra")
+
+    payload = build_design_consistency_payload(asset_kind, asset_name, reference_image_path, notes, variants)
+    label = ASSET_KIND_LABELS[asset_kind]
+    task = Task(
+        title=f"{asset_name} {label} 통일성 테스트",
+        task_type=f"{asset_kind}_consistency_test",
+        assignee_role="design_orchestra",
+        priority=40,
+        input_payload=payload,
+    )
+    db.add(task)
+    db.flush()
+
+    package = build_handoff_package(task, worker, settings.resolved_workspace_root)
+    task.status = "READY"
+    task.output_payload = {**(task.output_payload or {}), "handoff_package": package}
+    dispatch = Dispatch(
+        source_task_id=task.id,
+        target_task_id=task.id,
+        approval_id=None,
+        target_role=worker["role"],
+        target_thread_id=worker["thread_id"],
+        target_thread_title=worker["thread_title"],
+        prompt=package["prompt"],
+        dispatch_payload=package,
+    )
+    db.add(dispatch)
+    db.commit()
+    db.refresh(task)
+    db.refresh(dispatch)
+    return {
+        "reference_image_path": reference_image_path,
+        "task": TaskRead.model_validate(task).model_dump(mode="json"),
+        "dispatch": DispatchRead.model_validate(dispatch).model_dump(mode="json"),
+        "handoff_package": package,
+    }
+
+
 @app.get("/", include_in_schema=False)
 def dashboard() -> FileResponse:
     return FileResponse(static_dir / "index.html")
@@ -419,6 +565,40 @@ def update_task_status(task_id: str, payload: TaskStatusUpdate, db: Session = De
     db.commit()
     db.refresh(task)
     return task
+
+
+@app.post("/api/design/consistency-tests", status_code=201)
+async def create_design_consistency_test(
+    file: UploadFile = File(...),
+    asset_kind: str = Form(default="character"),
+    asset_name: str = Form(default="uploaded_asset"),
+    notes: str = Form(default=""),
+    variants: int = Form(default=4),
+    db: Session = Depends(get_db),
+) -> dict:
+    if asset_kind not in ASSET_KIND_LABELS:
+        raise HTTPException(422, detail=f"asset_kind must be one of: {', '.join(ASSET_KIND_LABELS)}")
+    if variants < 1 or variants > 8:
+        raise HTTPException(422, detail="variants must be between 1 and 8")
+
+    suffix = Path(file.filename or "").suffix.lower()
+    data = await file.read()
+    validate_uploaded_image(data, suffix)
+
+    upload_dir = upload_dir_for_kind(asset_kind)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    upload_path = upload_dir / f"{uuid4()}_{safe_upload_name(file.filename or 'reference')}{suffix}"
+    upload_path.write_bytes(data)
+    relative_reference = upload_path.relative_to(settings.resolved_workspace_root).as_posix()
+
+    return create_design_consistency_records(
+        db=db,
+        asset_kind=asset_kind,
+        asset_name=asset_name,
+        reference_image_path=relative_reference,
+        notes=notes,
+        variants=variants,
+    )
 
 
 @app.post("/api/design/character-consistency-tests", status_code=201)
