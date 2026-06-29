@@ -37,6 +37,31 @@
       <div id="pipeline-status" class="pipeline-status"></div>
     </section>
 
+    <section class="panel consistency-panel">
+      <div class="section-title"><h2>캐릭터 통일성 테스트 업로드</h2><span class="badge">Design QA</span></div>
+      <p class="subtitle">일러스트 1장을 업로드하면 게임 개발 디자인 채팅으로 보낼 통일성 테스트 작업과 dispatch 큐를 생성합니다.</p>
+      <form id="character-consistency-form" class="upload-form">
+        <label>
+          캐릭터 이름
+          <input type="text" name="character_name" placeholder="예: 두억시니 보스" required>
+        </label>
+        <label>
+          디자인 메모
+          <input type="text" name="notes" placeholder="유지해야 할 얼굴, 의상, 무기, 색상 특징">
+        </label>
+        <label>
+          테스트 변형 수
+          <input type="number" name="variants" value="4" min="1" max="8">
+        </label>
+        <label>
+          참조 일러스트
+          <input type="file" name="file" accept="image/png,image/jpeg,image/webp" required>
+        </label>
+        <button type="submit">통일성 테스트 큐 생성</button>
+      </form>
+      <div id="character-consistency-result" class="upload-result"></div>
+    </section>
+
     <div class="grid">
       <section class="panel">
         <div class="section-title"><h2>최근 작업</h2><button onclick="loadDashboard()">새로고침</button></div>

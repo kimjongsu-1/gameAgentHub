@@ -203,6 +203,34 @@ async function copyTextById(targetId) {
   await navigator.clipboard.writeText(target.value || target.textContent || "");
 }
 
+async function createCharacterConsistencyTest(form) {
+  const result = el("character-consistency-result");
+  const button = form.querySelector("button[type='submit']");
+  result.innerHTML = `<p class="subtitle">업로드와 큐 생성을 진행 중입니다...</p>`;
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/design/character-consistency-tests", {
+      method: "POST",
+      body: new FormData(form),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.detail || "통일성 테스트 큐 생성에 실패했습니다.");
+    }
+    result.innerHTML = `<div class="row">
+      <strong>통일성 테스트 큐 생성 완료</strong>
+      <span class="status">${escapeHtml(payload.dispatch.status)}</span>
+      <small>작업 ${escapeHtml(payload.task.id)} · 참조 이미지 ${escapeHtml(payload.reference_image_path)}</small>
+    </div>`;
+    form.reset();
+    await loadDashboard();
+  } catch (error) {
+    result.innerHTML = `<p class="subtitle">${escapeHtml(error.message)}</p>`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 el("approvals").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-decision]");
   if (!button) return;
@@ -220,6 +248,11 @@ el("super-grok-prompts").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-copy-target]");
   if (!button) return;
   copyTextById(button.dataset.copyTarget);
+});
+
+el("character-consistency-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  createCharacterConsistencyTest(event.currentTarget);
 });
 
 loadDashboard();

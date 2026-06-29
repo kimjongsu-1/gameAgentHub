@@ -18,6 +18,7 @@ Thumbs.db
 !00_control/pipeline/outbox/.gitkeep
 
 # Large generated assets are tracked by manifest, not by Git.
+03_character_masters/uploads/*
 04_concepts/work/*
 05_sprites/work/*
 05_sprites/qa/*
@@ -26,6 +27,7 @@ Thumbs.db
 07_cinematics/work/*
 08_runtime_captures/*
 !04_concepts/work/.gitkeep
+!03_character_masters/uploads/.gitkeep
 !05_sprites/work/.gitkeep
 !05_sprites/qa/.gitkeep
 !05_sprites/approved/.gitkeep

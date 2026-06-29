@@ -1,13 +1,15 @@
 import json
+from io import BytesIO
 from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -309,6 +311,54 @@ def build_super_grok_prompt(payload: SuperGrokPromptCreate, reference_image_path
     return prompt, negative_prompt, package_payload
 
 
+def safe_upload_name(filename: str) -> str:
+    stem = Path(filename or "reference").stem or "reference"
+    safe_stem = "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in stem).strip("_")
+    return safe_stem[:80] or "reference"
+
+
+def validate_uploaded_image(data: bytes, suffix: str) -> None:
+    if not data:
+        raise HTTPException(422, detail="Uploaded image is empty")
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(413, detail="Uploaded image is larger than 15 MB")
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp"}:
+        raise HTTPException(422, detail="Only PNG, JPG, JPEG, or WebP reference images are supported")
+    try:
+        Image.open(BytesIO(data)).verify()
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise HTTPException(422, detail="Uploaded file is not a valid image") from exc
+
+
+def build_character_consistency_payload(
+    character_name: str,
+    reference_image_path: str,
+    notes: str,
+    variants: int,
+) -> dict:
+    return {
+        "reference_image_path": reference_image_path,
+        "character_name": character_name,
+        "user_notes": notes,
+        "requested_variants": variants,
+        "test_goal": "참조 일러스트 1장을 기준으로 캐릭터 정체성이 통일되게 유지되는지 확인한다.",
+        "consistency_requirements": [
+            "얼굴 비율, 눈매, 표정 인상 유지",
+            "체형, 키, 실루엣 유지",
+            "의상 구조, 장식, 색상 팔레트 유지",
+            "무기/소품의 형태와 위치 유지",
+            "머리카락/뿔/꼬리/문양 같은 식별 요소 유지",
+            "다른 캐릭터처럼 보이는 재해석 금지",
+            "16프레임 제작 시 발 기준점과 몸 중심 정렬 유지",
+        ],
+        "requested_outputs": [
+            "참조 일러스트와 같은 캐릭터로 보이는 테스트 이미지 또는 시트",
+            "통일성 유지 체크리스트",
+            "바뀐 부분이 있다면 수정 필요 항목",
+        ],
+    }
+
+
 @app.get("/", include_in_schema=False)
 def dashboard() -> FileResponse:
     return FileResponse(static_dir / "index.html")
@@ -369,6 +419,70 @@ def update_task_status(task_id: str, payload: TaskStatusUpdate, db: Session = De
     db.commit()
     db.refresh(task)
     return task
+
+
+@app.post("/api/design/character-consistency-tests", status_code=201)
+async def create_character_consistency_test(
+    file: UploadFile = File(...),
+    character_name: str = Form(default="uploaded_character"),
+    notes: str = Form(default=""),
+    variants: int = Form(default=4),
+    db: Session = Depends(get_db),
+) -> dict:
+    if variants < 1 or variants > 8:
+        raise HTTPException(422, detail="variants must be between 1 and 8")
+
+    suffix = Path(file.filename or "").suffix.lower()
+    data = await file.read()
+    validate_uploaded_image(data, suffix)
+
+    upload_dir = settings.resolved_workspace_root / "03_character_masters" / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    upload_path = upload_dir / f"{uuid4()}_{safe_upload_name(file.filename or 'reference')}{suffix}"
+    upload_path.write_bytes(data)
+    relative_reference = upload_path.relative_to(settings.resolved_workspace_root).as_posix()
+
+    try:
+        worker = find_worker(load_agents(), "design_orchestra")
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    if not worker_is_configured(worker):
+        raise HTTPException(422, detail="Worker thread is not configured for role: design_orchestra")
+
+    payload = build_character_consistency_payload(character_name, relative_reference, notes, variants)
+    task = Task(
+        title=f"{character_name} 캐릭터 통일성 테스트",
+        task_type="character_consistency_test",
+        assignee_role="design_orchestra",
+        priority=40,
+        input_payload=payload,
+    )
+    db.add(task)
+    db.flush()
+
+    package = build_handoff_package(task, worker, settings.resolved_workspace_root)
+    task.status = "READY"
+    task.output_payload = {**(task.output_payload or {}), "handoff_package": package}
+    dispatch = Dispatch(
+        source_task_id=task.id,
+        target_task_id=task.id,
+        approval_id=None,
+        target_role=worker["role"],
+        target_thread_id=worker["thread_id"],
+        target_thread_title=worker["thread_title"],
+        prompt=package["prompt"],
+        dispatch_payload=package,
+    )
+    db.add(dispatch)
+    db.commit()
+    db.refresh(task)
+    db.refresh(dispatch)
+    return {
+        "reference_image_path": relative_reference,
+        "task": TaskRead.model_validate(task).model_dump(mode="json"),
+        "dispatch": DispatchRead.model_validate(dispatch).model_dump(mode="json"),
+        "handoff_package": package,
+    }
 
 
 @app.post("/api/tasks/{task_id}/handoff-package", response_model=HandoffPackageRead)

@@ -90,6 +90,19 @@ button:disabled { opacity: .45; cursor: wait; }
   font: .82rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 .copy-text { justify-self: start; color: var(--cyan); border-color: rgba(65,217,199,.45); }
+.consistency-panel { margin-bottom: 12px; }
+.upload-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 14px; }
+.upload-form label { display: grid; gap: 6px; color: var(--muted); font-size: .82rem; }
+.upload-form input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 10px;
+  color: var(--text);
+  background: rgba(0,0,0,.18);
+}
+.upload-form button { align-self: end; color: var(--cyan); border-color: rgba(65,217,199,.45); }
+.upload-result { margin-top: 12px; }
 .costs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 18px; }
 .cost-card { border-left: 3px solid var(--cyan); padding: 4px 14px; }
 .cost-card strong { display: block; font-size: 1.4rem; margin-top: 3px; }

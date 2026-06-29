@@ -1,4 +1,7 @@
+from io import BytesIO
+
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.config import get_settings
 from app.main import app
@@ -9,6 +12,12 @@ PNG_1X1 = (
     b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\xff"
     b"\xff?\x00\x05\xfe\x02\xfeA\xe2!\xbc\x00\x00\x00\x00IEND\xaeB`\x82"
 )
+
+
+def valid_png_bytes() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGBA", (1, 1), (255, 0, 0, 255)).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 def test_health_and_agents():
@@ -139,6 +148,34 @@ def test_super_grok_animation_prompt_package_from_character_image():
 
         dashboard = client.get("/api/dashboard").json()
         assert dashboard["recent_super_grok_prompts"][0]["id"] == package["id"]
+
+
+def test_character_consistency_upload_creates_design_dispatch():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/design/character-consistency-tests",
+            data={
+                "character_name": "두억시니 보스",
+                "notes": "붉은 눈, 뿔, 도깨비 방망이, 남색 의상 유지",
+                "variants": "4",
+            },
+            files={"file": ("dueoksini_reference.png", valid_png_bytes(), "image/png")},
+        )
+        assert response.status_code == 201
+        payload = response.json()
+        assert payload["reference_image_path"].startswith("03_character_masters/uploads/")
+        assert payload["task"]["assignee_role"] == "design_orchestra"
+        assert payload["task"]["task_type"] == "character_consistency_test"
+        assert payload["dispatch"]["status"] == "PENDING"
+        assert payload["dispatch"]["target_thread_title"] == "게임 개발 디자인"
+        prompt = payload["handoff_package"]["prompt"]
+        assert "참조 일러스트 1장" in prompt
+        assert "캐릭터 정체성이 통일" in prompt
+        assert "얼굴 비율" in prompt
+        assert "다른 캐릭터처럼 보이는 재해석 금지" in prompt
+        dispatch_id = payload["dispatch"]["id"]
+        assert client.post(f"/api/dispatches/{dispatch_id}/claim").status_code == 200
+        assert client.patch(f"/api/dispatches/{dispatch_id}", json={"status": "SENT"}).status_code == 200
 
 
 def test_gateway_policy_blocks_external_calls_by_default():
