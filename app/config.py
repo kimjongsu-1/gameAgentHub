@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     claude_soft_limit_usd: float = 8.0
     claude_stop_limit_usd: float = 9.0
     openai_monthly_budget_usd: float = 0.0
+    external_ai_calls_enabled: bool = False
+    gateway_default_policy: str = "record_only_no_external_calls"
     workspace_root: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

@@ -17,7 +17,7 @@ def build_handoff_package(task: Task, worker: dict[str, Any], workspace_root: Pa
     created_at = datetime.now(timezone.utc).isoformat()
     is_design = worker["role"] == "design_orchestra"
     required_outputs = (
-        ["원본 PNG", "정확히 16프레임인 스프라이트 시트", "에셋 manifest JSON"]
+        ["원본 PNG", "정확한 16프레임 스프라이트 시트", "에셋 manifest JSON"]
         if is_design
         else ["Unity 적용 보고서", "런타임 캡처", "빌드 및 테스트 보고서"]
     )
@@ -31,19 +31,19 @@ def build_handoff_package(task: Task, worker: dict[str, Any], workspace_root: Pa
         "target_thread_title": worker["thread_title"],
         "input_payload": task.input_payload,
         "required_outputs": required_outputs,
-        "approval_policy": "결과는 중앙 QA와 사용자 승인을 통과하기 전 게임에 적용하지 않는다.",
+        "approval_policy": "결과물은 중앙 QA와 사용자 승인을 통과하기 전에는 게임에 적용하지 않는다.",
         "created_at": created_at,
     }
     output_lines = [f"- {item}" for item in required_outputs]
     closing_lines = (
         [
-            "완성 결과는 게임에 직접 적용하지 말고 오케스트레이터에 반환하세요.",
+            "완성 결과물을 게임에 직접 적용하지 말고 오케스트라 허브에 반환하세요.",
             "중앙 QA와 사용자 최종 승인을 통과한 에셋만 게임개발 채팅으로 전달합니다.",
         ]
         if is_design
         else [
             "승인된 입력 에셋만 사용하세요.",
-            "런타임 결과와 발견한 문제를 오케스트레이터에 반환하세요.",
+            "런타임 결과와 발견한 문제를 오케스트라 허브에 반환하세요.",
         ]
     )
     prompt = "\n".join(

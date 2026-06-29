@@ -22,7 +22,10 @@ function approvalRow(item) {
 }
 
 function dispatchRow(item) {
-  return `<div class="row"><strong>${escapeHtml(item.target_thread_title)}</strong><span class="status">${item.status}</span><small>${escapeHtml(item.target_role)} · 시도 ${item.attempts}회</small></div>`;
+  const retry = item.status === "FAILED"
+    ? `<button class="retry-dispatch" data-dispatch-id="${item.id}">재시도</button>`
+    : "";
+  return `<div class="row"><strong>${escapeHtml(item.target_thread_title)}</strong><span class="status">${item.status}</span><small>${escapeHtml(item.target_role)} · 시도 ${item.attempts}회${item.last_error ? ` · ${escapeHtml(item.last_error)}` : ""}</small>${retry}</div>`;
 }
 
 function runtimeRow(item) {
@@ -37,11 +40,12 @@ function escapeHtml(value) {
 
 async function loadDashboard() {
   try {
-    const [health, data] = await Promise.all([
+    const [health, data, gateway] = await Promise.all([
       fetch("/health").then((r) => r.json()),
       fetch("/api/dashboard").then((r) => r.json()),
+      fetch("/api/gateway/policy").then((r) => r.json()),
     ]);
-    el("health").textContent = health.status === "ok" ? "시스템 정상" : "점검 필요";
+    el("health").textContent = health.status === "ok" ? "시스템 정상" : "확인 필요";
     el("health").className = "health ok";
 
     const counts = data.counts || {};
@@ -61,8 +65,8 @@ async function loadDashboard() {
     el("approvals").className = data.pending_approvals.length ? "list" : "list empty";
     el("approvals").innerHTML = data.pending_approvals.length ? data.pending_approvals.map(approvalRow).join("") : "승인 요청이 없습니다.";
 
-    const pendingDispatches = (data.recent_dispatches || []).filter((item) => item.status === "PENDING" || item.status === "CLAIMED");
-    el("dispatch-count").textContent = pendingDispatches.length;
+    const activeDispatches = (data.recent_dispatches || []).filter((item) => ["PENDING", "CLAIMED", "FAILED"].includes(item.status));
+    el("dispatch-count").textContent = activeDispatches.length;
     el("dispatches").className = data.recent_dispatches.length ? "list" : "list empty";
     el("dispatches").innerHTML = data.recent_dispatches.length ? data.recent_dispatches.map(dispatchRow).join("") : "전달 대기 작업이 없습니다.";
 
@@ -77,6 +81,7 @@ async function loadDashboard() {
       const hard = Number(data.budgets[provider]?.hard || 0);
       return `<div class="cost-card"><small>${provider.toUpperCase()}</small><strong>$${spent.toFixed(2)}</strong><span class="subtitle">한도 ${hard ? `$${hard.toFixed(2)}` : "미설정"}</span></div>`;
     }).join("");
+    el("gateway").innerHTML = `<p class="subtitle">Gateway: ${gateway.external_calls_enabled ? "외부 호출 허용" : "외부 호출 차단"} · 기본 정책 ${gateway.default_policy}</p>`;
   } catch (error) {
     el("health").textContent = "연결 실패";
     el("health").className = "health";
@@ -101,11 +106,26 @@ async function decideApproval(approvalId, decision, button) {
   await loadDashboard();
 }
 
+async function retryDispatch(dispatchId) {
+  const response = await fetch(`/api/dispatches/${dispatchId}/retry`, { method: "POST" });
+  if (!response.ok) {
+    const error = await response.json();
+    window.alert(error.detail || "재시도 등록에 실패했습니다.");
+  }
+  await loadDashboard();
+}
+
 el("approvals").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-decision]");
   if (!button) return;
   const card = button.closest(".approval-card");
   decideApproval(card.dataset.approvalId, button.dataset.decision, button);
+});
+
+el("dispatches").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-dispatch-id]");
+  if (!button) return;
+  retryDispatch(button.dataset.dispatchId);
 });
 
 loadDashboard();

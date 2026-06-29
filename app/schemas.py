@@ -82,6 +82,7 @@ class ApprovalCreate(BaseModel):
     summary: str
     preview_paths: list[str] = Field(default_factory=list)
     recommendation: str | None = None
+    asset_ids: list[str] = Field(default_factory=list)
 
 
 class ApprovalDecision(BaseModel):

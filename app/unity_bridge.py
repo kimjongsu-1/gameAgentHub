@@ -80,7 +80,7 @@ def stage_unity_import(
         raise UnityBridgeError("Manifest must contain file_path")
     source = Path(source_value)
     if not source.is_absolute():
-        candidates = [(manifest_path.parent / source).resolve(), (manifest_path.parent.parent / source).resolve()]
+        candidates = [(parent / source).resolve() for parent in manifest_path.parents]
         source = next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
     if not source.is_file() or source.suffix.lower() != ".png":
         raise UnityBridgeError(f"Approved PNG does not exist: {source}")

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import Base, engine, get_db
 from app.handoff import build_handoff_package, find_worker
-from app.models import ApiUsage, Approval, Asset, Dispatch, RuntimeReport, Task
+from app.models import ApiUsage, Approval, ApprovalAsset, Asset, Dispatch, RuntimeReport, Task
 from app.schemas import (
     TASK_STATUSES,
     ApiUsageCreate,
@@ -35,7 +35,7 @@ from app.schemas import (
     TaskStatusUpdate,
 )
 from app.sprite_qa import QAConfig, SpriteQAError, run_sprite_qa
-from app.workflow import queue_game_dispatch
+from app.workflow import promote_approved_assets, queue_game_dispatch
 
 
 settings = get_settings()
@@ -297,9 +297,18 @@ def create_approval(payload: ApprovalCreate, db: Session = Depends(get_db)) -> A
     task = db.get(Task, payload.task_id)
     if not task:
         raise HTTPException(404, detail="Task not found")
-    approval = Approval(**payload.model_dump())
+    assets = []
+    for asset_id in dict.fromkeys(payload.asset_ids):
+        asset = db.scalar(select(Asset).where(Asset.asset_id == asset_id))
+        if not asset:
+            raise HTTPException(404, detail=f"Asset not found: {asset_id}")
+        assets.append(asset)
+    approval = Approval(**payload.model_dump(exclude={"asset_ids"}))
     task.status = "WAITING_USER_APPROVAL"
     db.add(approval)
+    db.flush()
+    for asset in assets:
+        db.add(ApprovalAsset(approval_id=approval.id, asset_id=asset.asset_id))
     db.commit()
     db.refresh(approval)
     return approval
@@ -318,6 +327,10 @@ def decide_approval(approval_id: str, payload: ApprovalDecision, db: Session = D
     approval.decided_at = datetime.now(timezone.utc)
     approval.task.status = "APPROVED" if payload.decision == "APPROVED" else "REVISION_REQUIRED"
     if payload.decision == "APPROVED":
+        try:
+            promote_approved_assets(db, approval, settings.resolved_workspace_root)
+        except ValueError as exc:
+            raise HTTPException(409, detail=str(exc)) from exc
         queue_game_dispatch(
             db,
             approval.task,
@@ -325,6 +338,9 @@ def decide_approval(approval_id: str, payload: ApprovalDecision, db: Session = D
             load_agents(),
             settings.resolved_workspace_root,
         )
+    elif payload.decision == "REVISION_REQUIRED":
+        for link in approval.linked_assets:
+            link.asset.status = "REVISION_REQUIRED"
     db.commit()
     db.refresh(approval)
     return approval
@@ -376,6 +392,22 @@ def finish_dispatch(
             target_task = db.get(Task, dispatch.target_task_id)
             if target_task:
                 target_task.status = "RUNNING"
+    db.commit()
+    db.refresh(dispatch)
+    return dispatch
+
+
+@app.post("/api/dispatches/{dispatch_id}/retry", response_model=DispatchRead)
+def retry_dispatch(dispatch_id: str, db: Session = Depends(get_db)) -> Dispatch:
+    dispatch = db.get(Dispatch, dispatch_id)
+    if not dispatch:
+        raise HTTPException(404, detail="Dispatch not found")
+    if dispatch.status != "FAILED":
+        raise HTTPException(409, detail=f"Only FAILED dispatches can be retried; current status is {dispatch.status}")
+    dispatch.status = "PENDING"
+    dispatch.last_error = None
+    dispatch.claimed_at = None
+    dispatch.sent_at = None
     db.commit()
     db.refresh(dispatch)
     return dispatch
@@ -439,6 +471,69 @@ def record_usage(payload: ApiUsageCreate, db: Session = Depends(get_db)) -> ApiU
     return usage
 
 
+def monthly_provider_costs(db: Session) -> dict:
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return dict(
+        db.execute(
+            select(
+                ApiUsage.provider,
+                func.coalesce(func.sum(func.coalesce(ApiUsage.actual_cost_usd, ApiUsage.estimated_cost_usd)), 0),
+            )
+            .where(ApiUsage.created_at >= month_start)
+            .group_by(ApiUsage.provider)
+        ).all()
+    )
+
+
+@app.get("/api/gateway/policy")
+def gateway_policy(db: Session = Depends(get_db)) -> dict:
+    costs = monthly_provider_costs(db)
+    return {
+        "external_calls_enabled": settings.external_ai_calls_enabled,
+        "default_policy": settings.gateway_default_policy,
+        "monthly_cost_usd": costs,
+        "budgets": {
+            "claude": {
+                "hard": settings.claude_monthly_budget_usd,
+                "soft": settings.claude_soft_limit_usd,
+                "stop": settings.claude_stop_limit_usd,
+            },
+            "openai": {"hard": settings.openai_monthly_budget_usd},
+        },
+        "rules": [
+            "허브가 승인한 큐 항목만 처리한다.",
+            "기본 설정에서는 외부 AI API를 호출하지 않고 사용량/비용/실패만 기록한다.",
+            "provider별 hard/stop 한도 초과 시 WAITING_BUDGET_RESET로 넘긴다.",
+        ],
+    }
+
+
+@app.post("/api/gateway/check")
+def gateway_check(payload: ApiUsageCreate, db: Session = Depends(get_db)) -> dict:
+    costs = monthly_provider_costs(db)
+    provider = payload.provider.lower()
+    projected_cost = float(costs.get(provider, 0)) + float(payload.actual_cost_usd or payload.estimated_cost_usd or 0)
+    hard_limit = {
+        "claude": settings.claude_stop_limit_usd,
+        "openai": settings.openai_monthly_budget_usd,
+    }.get(provider, 0)
+    budget_allows = hard_limit <= 0 or projected_cost <= hard_limit
+    allowed = bool(settings.external_ai_calls_enabled and budget_allows)
+    reason = "allowed"
+    if not settings.external_ai_calls_enabled:
+        reason = "external_ai_calls_disabled"
+    elif not budget_allows:
+        reason = "budget_limit_exceeded"
+    return {
+        "allowed": allowed,
+        "reason": reason,
+        "provider": provider,
+        "projected_monthly_cost_usd": projected_cost,
+        "limit_usd": hard_limit,
+        "policy": settings.gateway_default_policy,
+    }
+
+
 @app.get("/api/dashboard")
 def dashboard_data(db: Session = Depends(get_db)) -> dict:
     tasks = list(db.scalars(select(Task).order_by(Task.updated_at.desc()).limit(12)))
@@ -455,16 +550,7 @@ def dashboard_data(db: Session = Depends(get_db)) -> dict:
         db.scalars(select(RuntimeReport).order_by(RuntimeReport.created_at.desc()).limit(12))
     )
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    costs = dict(
-        db.execute(
-            select(
-                ApiUsage.provider,
-                func.coalesce(func.sum(func.coalesce(ApiUsage.actual_cost_usd, ApiUsage.estimated_cost_usd)), 0),
-            )
-            .where(ApiUsage.created_at >= month_start)
-            .group_by(ApiUsage.provider)
-        ).all()
-    )
+    costs = monthly_provider_costs(db)
     asset_counts = Counter(asset.status for asset in db.scalars(select(Asset)))
     dispatch_counts = Counter(item.status for item in db.scalars(select(Dispatch)))
     runtime_counts = Counter(item.status for item in db.scalars(select(RuntimeReport)))

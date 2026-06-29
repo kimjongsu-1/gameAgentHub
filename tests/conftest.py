@@ -11,8 +11,17 @@ TEST_WORKSPACE.mkdir(exist_ok=True)
 
 
 def pytest_sessionfinish(session, exitstatus):
+    try:
+        from app.database import engine
+
+        engine.dispose()
+    except Exception:
+        pass
     for suffix in ("", "-shm", "-wal"):
         path = Path(f"{TEST_DB}{suffix}")
         if path.exists():
-            path.unlink()
+            try:
+                path.unlink()
+            except PermissionError:
+                pass
     shutil.rmtree(TEST_WORKSPACE, ignore_errors=True)

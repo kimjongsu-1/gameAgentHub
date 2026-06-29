@@ -7,14 +7,15 @@ def test_health_and_agents():
     with TestClient(app) as client:
         assert client.get("/health").json()["status"] == "ok"
         agents = client.get("/api/agents").json()
-        assert agents["orchestrator"]["thread_title"] == "통합 제작 파이프라인 구축"
+        assert agents["orchestrator"]["thread_title"] == "게임 제작 통합 파이프라인 구축"
         assert {worker["role"] for worker in agents["workers"]} == {
             "design_orchestra",
             "game_development",
         }
+        assert {worker["thread_title"] for worker in agents["workers"]} >= {"게임 개발 디자인", "게임개발"}
 
 
-def test_task_approval_flow():
+def test_task_approval_flow_without_linked_game_asset():
     with TestClient(app) as client:
         task = client.post(
             "/api/tasks",
@@ -33,7 +34,7 @@ def test_task_approval_flow():
             json={
                 "task_id": task_id,
                 "approval_type": "SPRITE_GIF",
-                "summary": "16프레임 걷기 모션 검토",
+                "summary": "16프레임 걷기 모션 검수",
                 "preview_paths": ["05_sprites/qa/preview.gif"],
             },
         )
@@ -72,3 +73,19 @@ def test_asset_uniqueness():
         saved = client.get("/api/assets").json()[0]
         assert saved["frame_count"] == 16
         assert saved["metadata"]["direction"] == "left"
+
+
+def test_gateway_policy_blocks_external_calls_by_default():
+    with TestClient(app) as client:
+        policy = client.get("/api/gateway/policy").json()
+        assert policy["external_calls_enabled"] is False
+        check = client.post(
+            "/api/gateway/check",
+            json={
+                "provider": "openai",
+                "model": "gpt-test",
+                "estimated_cost_usd": 0.01,
+            },
+        ).json()
+        assert check["allowed"] is False
+        assert check["reason"] == "external_ai_calls_disabled"

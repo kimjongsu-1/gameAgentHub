@@ -3,13 +3,13 @@
   "orchestrator": {
     "role": "orchestrator",
     "thread_id": "019f1116-edae-76b3-9c9c-97f5ea8d61f8",
-    "thread_title": "통합 제작 파이프라인 구축",
+    "thread_title": "게임 제작 통합 파이프라인 구축",
     "responsibilities": [
       "작업 생성 및 배정",
       "상태 추적과 재시도",
       "중앙 QA",
       "사용자 승인 요청",
-      "승인된 결과의 다음 단계 전달"
+      "승인된 결과만 다음 단계로 전달"
     ]
   },
   "workers": [

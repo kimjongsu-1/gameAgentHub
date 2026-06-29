@@ -69,6 +69,24 @@ class Approval(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     task: Mapped[Task] = relationship(back_populates="approvals")
+    linked_assets: Mapped[list["ApprovalAsset"]] = relationship(
+        back_populates="approval", cascade="all, delete-orphan"
+    )
+
+    @property
+    def asset_ids(self) -> list[str]:
+        return [item.asset_id for item in self.linked_assets]
+
+
+class ApprovalAsset(Base):
+    __tablename__ = "approval_assets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    approval_id: Mapped[str] = mapped_column(ForeignKey("approvals.id"), index=True)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.asset_id"), index=True)
+
+    approval: Mapped[Approval] = relationship(back_populates="linked_assets")
+    asset: Mapped[Asset] = relationship()
 
 
 class ApiUsage(Base):

@@ -1,4 +1,6 @@
+import hashlib
 import json
+import uuid
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -98,7 +100,7 @@ def test_handoff_package_targets_design_thread():
         assert response.status_code == 200
         package = response.json()
         assert package["target_thread_title"] == "게임 개발 디자인"
-        assert "정확히 16프레임" in package["prompt"]
+        assert "정확한 16프레임" in package["prompt"]
         assert (get_settings().resolved_workspace_root / package["json_path"]).is_file()
 
 
@@ -109,9 +111,13 @@ def test_sprite_qa_rejects_path_outside_workspace():
 
 
 def test_approved_qa_pass_queues_and_completes_game_dispatch():
+    suffix = uuid.uuid4().hex[:8]
+    asset_id = f"CHR_APPROVED_WALK_TEST_{suffix}"
     root = get_settings().resolved_workspace_root
-    preview = root / "05_sprites" / "qa" / "approved_walk" / "contact_sheet.png"
+    preview = root / "05_sprites" / "qa" / f"approved_walk_{suffix}" / "contact_sheet.png"
+    source = root / "05_sprites" / "work" / f"approved_walk_{suffix}.png"
     make_sheet(preview)
+    make_sheet(source)
     with TestClient(app) as client:
         task = client.post(
             "/api/tasks",
@@ -128,18 +134,36 @@ def test_approved_qa_pass_queues_and_completes_game_dispatch():
                 "output_payload": {
                     "sprite_qa": {
                         "status": "PASS",
-                        "outputs": {"contact_sheet": "05_sprites/qa/approved_walk/contact_sheet.png"},
+                        "outputs": {"contact_sheet": f"05_sprites/qa/approved_walk_{suffix}/contact_sheet.png"},
                     }
                 },
             },
         )
+        asset = client.post(
+            "/api/assets",
+            json={
+                "asset_id": asset_id,
+                "asset_type": "SPRITE_SHEET",
+                "character_version": "test_v01",
+                "style_version": "style_v01",
+                "source_asset": f"approved_walk_{suffix}.png",
+                "file_path": f"05_sprites/work/approved_walk_{suffix}.png",
+                "frame_count": 16,
+                "fps": 12,
+                "loop": True,
+                "status": "QA_PASS",
+                "checksum": f"sha256:{hashlib.sha256(source.read_bytes()).hexdigest()}",
+                "created_by": "design_orchestra",
+            },
+        ).json()
         approval = client.post(
             "/api/approvals",
             json={
                 "task_id": task["id"],
                 "approval_type": "SPRITE_GIF",
                 "summary": "게임 적용 전 최종 승인",
-                "preview_paths": ["05_sprites/qa/approved_walk/contact_sheet.png"],
+                "preview_paths": [f"05_sprites/qa/approved_walk_{suffix}/contact_sheet.png"],
+                "asset_ids": [asset["asset_id"]],
             },
         ).json()
         decision = client.post(
@@ -156,8 +180,16 @@ def test_approved_qa_pass_queues_and_completes_game_dispatch():
         assert len(dispatches) == 1
         dispatch = dispatches[0]
         assert dispatch["target_thread_title"] == "게임개발"
-        assert "QA_PASS" not in dispatch["prompt"]
-        assert "승인된 입력 에셋만 사용하세요" in dispatch["prompt"]
+        assert "승인된 입력 에셋만 사용하세요." in dispatch["prompt"]
+        assert dispatch["dispatch_payload"]["prompt"]
+        assets = {item["asset_id"]: item for item in client.get("/api/assets").json()}
+        saved = assets[asset["asset_id"]]
+        assert saved["status"] == "APPROVED"
+        assert saved["file_path"] == f"05_sprites/approved/approved_walk_{suffix}.png"
+        assert saved["metadata"]["manifest_path"] == f"05_sprites/approved/manifests/{asset_id}.json"
+        assert saved["metadata"]["unity_staging"]["status"] == "STAGED"
+        assert (root / f"05_sprites/approved/approved_walk_{suffix}.png").is_file()
+        assert (root / saved["metadata"]["unity_staging"]["request_path"]).is_file()
 
         claimed = client.post(f"/api/dispatches/{dispatch['id']}/claim")
         assert claimed.json()["status"] == "CLAIMED"
@@ -166,6 +198,30 @@ def test_approved_qa_pass_queues_and_completes_game_dispatch():
         tasks = {item["id"]: item for item in client.get("/api/tasks").json()}
         assert tasks[dispatch["target_task_id"]]["status"] == "RUNNING"
 
-        preview_response = client.get("/workspace-files/05_sprites/qa/approved_walk/contact_sheet.png")
+        preview_response = client.get(f"/workspace-files/05_sprites/qa/approved_walk_{suffix}/contact_sheet.png")
         assert preview_response.status_code == 200
         assert preview_response.headers["content-type"] == "image/png"
+
+
+def test_failed_dispatch_can_be_retried():
+    with TestClient(app) as client:
+        task = client.post(
+            "/api/tasks",
+            json={
+                "title": "재시도 테스트",
+                "task_type": "unity_bridge_setup",
+                "assignee_role": "game_development",
+                "input_payload": {"bridge_source": "06_game/unity_bridge/Editor/ApprovedAssetImporter.cs"},
+            },
+        ).json()
+        dispatch = client.post(f"/api/tasks/{task['id']}/queue-dispatch").json()
+        client.post(f"/api/dispatches/{dispatch['id']}/claim")
+        failed = client.patch(
+            f"/api/dispatches/{dispatch['id']}",
+            json={"status": "FAILED", "last_error": "thread unavailable"},
+        )
+        assert failed.json()["status"] == "FAILED"
+        retried = client.post(f"/api/dispatches/{dispatch['id']}/retry")
+        assert retried.status_code == 200
+        assert retried.json()["status"] == "PENDING"
+        assert retried.json()["last_error"] is None
