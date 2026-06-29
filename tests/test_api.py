@@ -9,10 +9,34 @@ def test_health_and_agents():
         agents = client.get("/api/agents").json()
         assert agents["orchestrator"]["thread_title"] == "게임 제작 통합 파이프라인 구축"
         assert {worker["role"] for worker in agents["workers"]} == {
+            "planning_research",
             "design_orchestra",
             "game_development",
         }
-        assert {worker["thread_title"] for worker in agents["workers"]} >= {"게임 개발 디자인", "게임개발"}
+        assert {worker["thread_title"] for worker in agents["workers"]} >= {
+            "게임 개발 기획",
+            "게임 개발 디자인",
+            "게임개발",
+        }
+
+
+def test_planning_research_handoff_package():
+    with TestClient(app) as client:
+        task = client.post(
+            "/api/tasks",
+            json={
+                "title": "방치형 RPG 핵심 루프 조사",
+                "task_type": "system_design",
+                "assignee_role": "planning_research",
+                "input_payload": {"genre": "mobile idle RPG", "focus": "retention loop"},
+            },
+        ).json()
+        response = client.post(f"/api/tasks/{task['id']}/handoff-package")
+        assert response.status_code == 200
+        package = response.json()
+        assert package["target_thread_title"] == "게임 개발 기획"
+        assert "기획 조사 요약 문서" in package["prompt"]
+        assert "디자인팀 전달 요구사항" in package["prompt"]
 
 
 def test_task_approval_flow_without_linked_game_asset():

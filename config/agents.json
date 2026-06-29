@@ -14,6 +14,21 @@
   },
   "workers": [
     {
+      "role": "planning_research",
+      "thread_id": "TODO_CREATE_GAME_PLANNING_THREAD",
+      "thread_title": "게임 개발 기획",
+      "cwd": "C:\\Users\\kukl3\\Documents\\게임 개발 프로젝트",
+      "accepts": [
+        "game_concept",
+        "market_research",
+        "system_design",
+        "worldbuilding",
+        "content_planning",
+        "economy_design"
+      ],
+      "requires_user_approval": true
+    },
+    {
       "role": "design_orchestra",
       "thread_id": "019f01d6-66f5-7620-9eec-585ce9d2285a",
       "thread_title": "게임 개발 디자인",
@@ -30,5 +45,5 @@
       "requires_status": ["QA_PASS", "APPROVED"]
     }
   ],
-  "handoff_rule": "orchestrator -> design_orchestra -> QA -> user_approval -> game_development"
+  "handoff_rule": "orchestrator -> planning_research -> design_orchestra -> QA -> user_approval -> game_development"
 }

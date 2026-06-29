@@ -13,14 +13,40 @@ def find_worker(agent_config: dict[str, Any], role: str) -> dict[str, Any]:
     raise ValueError(f"No worker configured for role: {role}")
 
 
+def required_outputs_for(role: str) -> list[str]:
+    if role == "planning_research":
+        return [
+            "기획 조사 요약 문서",
+            "레퍼런스와 근거 목록",
+            "디자인팀 전달 요구사항",
+            "개발팀 전달 시스템 요구사항",
+        ]
+    if role == "design_orchestra":
+        return ["원본 PNG", "정확한 16프레임 스프라이트 시트", "에셋 manifest JSON"]
+    return ["Unity 적용 보고서", "런타임 캡처", "빌드 및 테스트 보고서"]
+
+
+def closing_lines_for(role: str) -> list[str]:
+    if role == "planning_research":
+        return [
+            "조사 결과는 추측과 확정 사항을 분리해서 작성하세요.",
+            "디자인/개발로 넘길 요구사항은 체크리스트 형태로 정리하세요.",
+            "외부 자료를 사용한 경우 출처나 검색 키워드를 함께 남기세요.",
+        ]
+    if role == "design_orchestra":
+        return [
+            "완성 결과물을 게임에 직접 적용하지 말고 오케스트라 허브에 반환하세요.",
+            "중앙 QA와 사용자 최종 승인을 통과한 에셋만 게임개발 채팅으로 전달합니다.",
+        ]
+    return [
+        "승인된 입력 에셋만 사용하세요.",
+        "런타임 결과와 발견한 문제를 오케스트라 허브에 반환하세요.",
+    ]
+
+
 def build_handoff_package(task: Task, worker: dict[str, Any], workspace_root: Path) -> dict[str, Any]:
     created_at = datetime.now(timezone.utc).isoformat()
-    is_design = worker["role"] == "design_orchestra"
-    required_outputs = (
-        ["원본 PNG", "정확한 16프레임 스프라이트 시트", "에셋 manifest JSON"]
-        if is_design
-        else ["Unity 적용 보고서", "런타임 캡처", "빌드 및 테스트 보고서"]
-    )
+    required_outputs = required_outputs_for(worker["role"])
     payload = {
         "schema_version": 1,
         "task_id": task.id,
@@ -35,17 +61,7 @@ def build_handoff_package(task: Task, worker: dict[str, Any], workspace_root: Pa
         "created_at": created_at,
     }
     output_lines = [f"- {item}" for item in required_outputs]
-    closing_lines = (
-        [
-            "완성 결과물을 게임에 직접 적용하지 말고 오케스트라 허브에 반환하세요.",
-            "중앙 QA와 사용자 최종 승인을 통과한 에셋만 게임개발 채팅으로 전달합니다.",
-        ]
-        if is_design
-        else [
-            "승인된 입력 에셋만 사용하세요.",
-            "런타임 결과와 발견한 문제를 오케스트라 허브에 반환하세요.",
-        ]
-    )
+    closing_lines = closing_lines_for(worker["role"])
     prompt = "\n".join(
         [
             f"[통합 제작 허브 작업 {task.id}]",

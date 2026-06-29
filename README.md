@@ -16,6 +16,7 @@
 - 승인 manifest와 체크섬을 검증하는 Unity Import 패키지
 - Unity Import·런타임 결과 보고서 회수 API
 - 재현 가능한 에셋 manifest JSON Schema
+- MCP 총괄 PM 서버 골격과 planning/design/development 작업 라우팅
 
 외부 AI API 호출과 이미지 생성은 아직 활성화하지 않았습니다. 채팅 자동 전송 워커는 활성화되어 승인된 전달 큐를 5분 간격으로 처리합니다. Unity 프로젝트 변경은 `게임개발` 채팅이 승인 패키지를 받은 경우에만 수행합니다.
 
@@ -102,10 +103,22 @@ python -m pytest -q
 ## 담당 채팅
 
 - 총괄: 현재 `통합 제작 파이프라인 구축`
+- 기획·자료조사: `게임 개발 기획`
 - 디자인·16프레임: 기존 `게임 개발 디자인`
 - Unity 구현: 기존 `게임개발`
 
 제목은 표시용이며 실제 라우팅은 [config/agents.json](config/agents.json)의 `thread_id`를 사용합니다.
+
+## MCP 총괄 PM
+
+총괄 PM 역할은 `mcp_server/pm_server.py`가 담당합니다. 이 MCP 서버는 별도 DB를 만들지 않고, 로컬 허브 API를 호출하는 tool 표면을 제공합니다.
+
+```powershell
+$env:GAME_HUB_URL="http://127.0.0.1:8000"
+python -m mcp_server.pm_server
+```
+
+자세한 내용은 [docs/MCP_PM_SERVER.md](docs/MCP_PM_SERVER.md)를 참고합니다.
 
 ## 안전 원칙
 
