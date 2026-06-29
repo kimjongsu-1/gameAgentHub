@@ -18,6 +18,10 @@ Thumbs.db
 !00_control/pipeline/outbox/.gitkeep
 
 # Large generated assets are tracked by manifest, not by Git.
+01_game_bible/uploads/*
+01_game_bible/work/*
+01_game_bible/revisions/*
+01_game_bible/game_bible_index.json
 03_character_masters/uploads/*
 04_concepts/work/*
 05_sprites/work/*
@@ -27,6 +31,9 @@ Thumbs.db
 07_cinematics/work/*
 08_runtime_captures/*
 !04_concepts/work/.gitkeep
+!01_game_bible/uploads/.gitkeep
+!01_game_bible/work/.gitkeep
+!01_game_bible/revisions/.gitkeep
 !03_character_masters/uploads/.gitkeep
 !05_sprites/work/.gitkeep
 !05_sprites/qa/.gitkeep

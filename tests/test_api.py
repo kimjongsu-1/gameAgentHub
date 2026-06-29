@@ -178,6 +178,38 @@ def test_character_consistency_upload_creates_design_dispatch():
         assert client.patch(f"/api/dispatches/{dispatch_id}", json={"status": "SENT"}).status_code == 200
 
 
+def test_game_bible_upload_read_and_revision_update():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/game-bible/upload",
+            data={"title": "테스트 설정집", "notes": "초안"},
+            files={"file": ("setting.md", b"# World\n\n- idle RPG", "text/markdown")},
+        )
+        assert response.status_code == 201
+        uploaded = response.json()
+        assert uploaded["title"] == "테스트 설정집"
+        assert uploaded["content"].startswith("# World")
+        assert uploaded["revision_count"] == 0
+
+        listed = client.get("/api/game-bible").json()
+        assert any(item["id"] == uploaded["id"] for item in listed["documents"])
+
+        fetched = client.get(f"/api/game-bible/{uploaded['id']}")
+        assert fetched.status_code == 200
+        assert "idle RPG" in fetched.json()["content"]
+
+        updated = client.patch(
+            f"/api/game-bible/{uploaded['id']}",
+            json={"content": "# World\n\n- idle RPG\n- boss: dueoksini", "notes": "보스 추가"},
+        )
+        assert updated.status_code == 200
+        saved = updated.json()
+        assert saved["revision_count"] == 1
+        assert saved["notes"] == "보스 추가"
+        assert "boss: dueoksini" in saved["content"]
+        assert saved["last_revision_path"].startswith("01_game_bible/revisions/")
+
+
 def test_design_consistency_upload_supports_monsters_maps_and_items():
     cases = [
         ("monster", "두억시니 졸개", "04_concepts/work/uploads/monsters/", "monster_consistency_test", "몬스터 종족"),

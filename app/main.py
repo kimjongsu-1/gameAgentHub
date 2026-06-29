@@ -38,6 +38,7 @@ from app.schemas import (
     AssetRead,
     DispatchRead,
     DispatchStatusUpdate,
+    GameBibleUpdate,
     HandoffPackageRead,
     RuntimeReportCreate,
     RuntimeReportRead,
@@ -505,6 +506,62 @@ def create_design_consistency_records(
     }
 
 
+GAME_BIBLE_TEXT_SUFFIXES = {".md", ".txt", ".json", ".yaml", ".yml"}
+GAME_BIBLE_ALLOWED_SUFFIXES = GAME_BIBLE_TEXT_SUFFIXES | {".pdf", ".docx"}
+
+
+def game_bible_root() -> Path:
+    root = settings.resolved_workspace_root / "01_game_bible"
+    (root / "uploads").mkdir(parents=True, exist_ok=True)
+    (root / "work").mkdir(parents=True, exist_ok=True)
+    (root / "revisions").mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def game_bible_index_path() -> Path:
+    return game_bible_root() / "game_bible_index.json"
+
+
+def read_game_bible_index() -> list[dict]:
+    path = game_bible_index_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(500, detail="Game bible index is corrupted") from exc
+    return data if isinstance(data, list) else []
+
+
+def write_game_bible_index(items: list[dict]) -> None:
+    game_bible_index_path().write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def find_game_bible_doc(doc_id: str) -> tuple[dict, list[dict]]:
+    items = read_game_bible_index()
+    for item in items:
+        if item["id"] == doc_id:
+            return item, items
+    raise HTTPException(404, detail="Game bible document not found")
+
+
+def read_upload_text(data: bytes, suffix: str) -> str:
+    if suffix not in GAME_BIBLE_TEXT_SUFFIXES:
+        return ""
+    for encoding in ("utf-8-sig", "utf-8", "cp949"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise HTTPException(422, detail="Text document encoding must be UTF-8 or CP949")
+
+
+def game_bible_response(item: dict) -> dict:
+    work_path = resolve_workspace_path(item["work_path"])
+    content = work_path.read_text(encoding="utf-8") if work_path.exists() else ""
+    return {**item, "content": content}
+
+
 @app.get("/", include_in_schema=False)
 def dashboard() -> FileResponse:
     return FileResponse(static_dir / "index.html")
@@ -565,6 +622,93 @@ def update_task_status(task_id: str, payload: TaskStatusUpdate, db: Session = De
     db.commit()
     db.refresh(task)
     return task
+
+
+@app.get("/api/game-bible")
+def list_game_bible_documents() -> dict:
+    return {"documents": read_game_bible_index()}
+
+
+@app.post("/api/game-bible/upload", status_code=201)
+async def upload_game_bible(
+    file: UploadFile = File(...),
+    title: str = Form(default="게임 설정집"),
+    notes: str = Form(default=""),
+) -> dict:
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in GAME_BIBLE_ALLOWED_SUFFIXES:
+        raise HTTPException(422, detail="Supported setting book files: md, txt, json, yaml, yml, pdf, docx")
+    data = await file.read()
+    if not data:
+        raise HTTPException(422, detail="Uploaded setting book is empty")
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(413, detail="Uploaded setting book is larger than 25 MB")
+
+    root = game_bible_root()
+    doc_id = str(uuid4())
+    safe_name = safe_upload_name(file.filename or "game_bible")
+    original_path = root / "uploads" / f"{doc_id}_{safe_name}{suffix}"
+    original_path.write_bytes(data)
+    relative_original = original_path.relative_to(settings.resolved_workspace_root).as_posix()
+
+    uploaded_text = read_upload_text(data, suffix)
+    if uploaded_text:
+        work_content = uploaded_text
+    else:
+        work_content = "\n".join(
+            [
+                f"# {title}",
+                "",
+                f"- 원본 파일: `{relative_original}`",
+                f"- 원본 형식: `{suffix}`",
+                "",
+                "이 파일은 원본 설정집을 바탕으로 허브에서 수정하는 작업본입니다.",
+                "PDF/DOCX 원문을 확인한 뒤 필요한 내용을 이곳에 Markdown으로 정리하세요.",
+                "",
+            ]
+        )
+    work_path = root / "work" / f"{doc_id}.md"
+    work_path.write_text(work_content, encoding="utf-8")
+    now = datetime.now(timezone.utc).isoformat()
+    item = {
+        "id": doc_id,
+        "title": title,
+        "notes": notes,
+        "status": "ACTIVE",
+        "original_path": relative_original,
+        "work_path": work_path.relative_to(settings.resolved_workspace_root).as_posix(),
+        "revision_count": 0,
+        "created_at": now,
+        "updated_at": now,
+    }
+    items = read_game_bible_index()
+    items.insert(0, item)
+    write_game_bible_index(items)
+    return game_bible_response(item)
+
+
+@app.get("/api/game-bible/{doc_id}")
+def get_game_bible_document(doc_id: str) -> dict:
+    item, _ = find_game_bible_doc(doc_id)
+    return game_bible_response(item)
+
+
+@app.patch("/api/game-bible/{doc_id}")
+def update_game_bible_document(doc_id: str, payload: GameBibleUpdate) -> dict:
+    item, items = find_game_bible_doc(doc_id)
+    work_path = resolve_workspace_path(item["work_path"])
+    previous = work_path.read_text(encoding="utf-8") if work_path.exists() else ""
+    revision_count = int(item.get("revision_count", 0)) + 1
+    revision_path = game_bible_root() / "revisions" / f"{doc_id}_r{revision_count:04d}.md"
+    revision_path.write_text(previous, encoding="utf-8")
+    work_path.write_text(payload.content, encoding="utf-8")
+    item["revision_count"] = revision_count
+    item["updated_at"] = datetime.now(timezone.utc).isoformat()
+    item["last_revision_path"] = revision_path.relative_to(settings.resolved_workspace_root).as_posix()
+    if payload.notes is not None:
+        item["notes"] = payload.notes
+    write_game_bible_index(items)
+    return game_bible_response(item)
 
 
 @app.post("/api/design/consistency-tests", status_code=201)

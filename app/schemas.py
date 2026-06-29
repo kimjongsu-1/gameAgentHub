@@ -220,3 +220,8 @@ class SuperGrokPromptRead(BaseModel):
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+
+class GameBibleUpdate(BaseModel):
+    content: str
+    notes: str | None = None

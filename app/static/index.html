@@ -19,6 +19,40 @@
 
     <section id="summary" class="summary"></section>
 
+    <section class="panel game-bible-panel">
+      <div class="section-title"><h2>게임 설정집 업로드 / 수정</h2><span class="badge">Game Bible</span></div>
+      <p class="subtitle">사용자가 직접 만든 설정집을 업로드하고, 허브 안에서 작업본을 계속 수정합니다.</p>
+      <form id="game-bible-upload-form" class="upload-form">
+        <label>
+          설정집 제목
+          <input type="text" name="title" placeholder="예: 프로젝트 설정집 v1" required>
+        </label>
+        <label>
+          메모
+          <input type="text" name="notes" placeholder="이번 업로드에서 바뀐 내용">
+        </label>
+        <label>
+          설정집 파일
+          <input type="file" name="file" accept=".md,.txt,.json,.yaml,.yml,.pdf,.docx" required>
+        </label>
+        <button type="submit">설정집 업로드</button>
+      </form>
+      <div class="bible-editor">
+        <label>
+          문서 선택
+          <select id="game-bible-select"></select>
+        </label>
+        <label>
+          작업본 Markdown
+          <textarea id="game-bible-content" rows="12" placeholder="업로드한 설정집 작업본이 여기에 표시됩니다."></textarea>
+        </label>
+        <div class="editor-actions">
+          <button id="game-bible-save" type="button">수정본 저장</button>
+          <span id="game-bible-status" class="subtitle"></span>
+        </div>
+      </div>
+    </section>
+
     <section class="pipeline panel">
       <h2>제작 파이프라인</h2>
       <div class="pipeline-row">

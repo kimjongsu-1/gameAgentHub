@@ -171,6 +171,80 @@ async function loadDashboard() {
   }
 }
 
+async function loadGameBibleDocuments(selectLatest = false) {
+  const select = el("game-bible-select");
+  const status = el("game-bible-status");
+  const response = await fetch("/api/game-bible");
+  const payload = await response.json();
+  const docs = payload.documents || [];
+  select.innerHTML = docs.length
+    ? docs.map((doc) => `<option value="${escapeHtml(doc.id)}">${escapeHtml(doc.title)} · r${doc.revision_count}</option>`).join("")
+    : `<option value="">업로드된 설정집 없음</option>`;
+  if (!docs.length) {
+    el("game-bible-content").value = "";
+    status.textContent = "설정집을 먼저 업로드하세요.";
+    return;
+  }
+  if (selectLatest) select.value = docs[0].id;
+  await loadSelectedGameBible();
+}
+
+async function loadSelectedGameBible() {
+  const docId = el("game-bible-select").value;
+  const status = el("game-bible-status");
+  if (!docId) return;
+  const response = await fetch(`/api/game-bible/${docId}`);
+  const doc = await response.json();
+  if (!response.ok) {
+    status.textContent = doc.detail || "설정집을 불러오지 못했습니다.";
+    return;
+  }
+  el("game-bible-content").value = doc.content || "";
+  status.textContent = `원본: ${doc.original_path} · 수정 ${doc.revision_count}회`;
+}
+
+async function uploadGameBible(form) {
+  const status = el("game-bible-status");
+  const button = form.querySelector("button[type='submit']");
+  button.disabled = true;
+  status.textContent = "설정집 업로드 중...";
+  try {
+    const response = await fetch("/api/game-bible/upload", {
+      method: "POST",
+      body: new FormData(form),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "설정집 업로드에 실패했습니다.");
+    form.reset();
+    status.textContent = "설정집 업로드 완료.";
+    await loadGameBibleDocuments(true);
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function saveSelectedGameBible() {
+  const docId = el("game-bible-select").value;
+  const status = el("game-bible-status");
+  if (!docId) return;
+  status.textContent = "수정본 저장 중...";
+  const response = await fetch(`/api/game-bible/${docId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: el("game-bible-content").value }),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    status.textContent = payload.detail || "수정본 저장에 실패했습니다.";
+    return;
+  }
+  status.textContent = `수정본 저장 완료 · revision ${payload.revision_count}`;
+  await loadGameBibleDocuments(false);
+  el("game-bible-select").value = docId;
+}
+
 async function decideApproval(approvalId, decision, button) {
   const labels = { APPROVED: "이 결과를 승인할까요?", REVISION_REQUIRED: "재작업을 요청할까요?", REJECTED: "이 결과를 거절할까요?" };
   if (!window.confirm(labels[decision])) return;
@@ -255,5 +329,14 @@ el("character-consistency-form").addEventListener("submit", (event) => {
   createCharacterConsistencyTest(event.currentTarget);
 });
 
+el("game-bible-upload-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  uploadGameBible(event.currentTarget);
+});
+
+el("game-bible-select").addEventListener("change", loadSelectedGameBible);
+el("game-bible-save").addEventListener("click", saveSelectedGameBible);
+
 loadDashboard();
+loadGameBibleDocuments();
 setInterval(loadDashboard, 30000);
