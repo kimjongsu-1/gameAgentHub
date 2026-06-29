@@ -26,9 +26,9 @@
   "workers": [
     {
       "role": "design_orchestra",
-      "thread_id": "019f01d6-66f5-7620-9eec-585ce9d2285a",
+      "thread_id": "019f13f1-1421-7601-908e-0ce38c4149e7",
       "thread_title": "게임 개발 디자인",
-      "cwd": "C:\\Users\\kukl3\\Documents\\Codex\\2026-06-26\\ai-4-10-ai-ai-gemini",
+      "cwd": "C:\\Users\\kukl3\\Documents\\게임 개발 프로젝트",
       "accepts": ["character_design", "sprite_16_frame", "animation_source"],
       "requires_user_approval": true
     },
