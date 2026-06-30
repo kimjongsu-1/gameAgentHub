@@ -37,6 +37,24 @@ def test_health_and_agents():
         }
 
 
+def test_image_library_page_and_workspace_scan():
+    image_path = get_settings().resolved_workspace_root / "05_sprites" / "qa" / "library_test.gif"
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(valid_png_bytes())
+    with TestClient(app) as client:
+        page = client.get("/images")
+        assert page.status_code == 200
+        assert "이미지 관리" in page.text
+
+        response = client.get("/api/image-library")
+        assert response.status_code == 200
+        payload = response.json()
+        saved = next(item for item in payload["items"] if item["file_name"] == "library_test.gif")
+        assert saved["category"] == "qa"
+        assert saved["is_animated"] is True
+        assert saved["path"] == "05_sprites/qa/library_test.gif"
+
+
 def test_design_handoff_package_documents_user_planning_and_local_qa():
     with TestClient(app) as client:
         task = client.post(

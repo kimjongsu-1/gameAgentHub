@@ -56,6 +56,15 @@ from app.workflow import promote_approved_assets, queue_game_dispatch
 settings = get_settings()
 static_dir = Path(__file__).parent / "static"
 
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+IMAGE_LIBRARY_ROOTS = {
+    "concept": "04_concepts/work",
+    "sprite": "05_sprites/work",
+    "qa": "05_sprites/qa",
+    "cinematic": "07_cinematics/work",
+    "runtime": "08_runtime_captures",
+}
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -567,13 +576,120 @@ def dashboard() -> FileResponse:
     return FileResponse(static_dir / "index.html")
 
 
+@app.get("/images", include_in_schema=False)
+def image_library_page() -> FileResponse:
+    return FileResponse(static_dir / "images.html")
+
+
 @app.get("/workspace-files/{file_path:path}", include_in_schema=False)
 def workspace_file(file_path: str) -> FileResponse:
     path = resolve_workspace_path(file_path)
-    allowed = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-    if path.suffix.lower() not in allowed or not path.is_file():
+    if path.suffix.lower() not in IMAGE_SUFFIXES or not path.is_file():
         raise HTTPException(404, detail="Preview not found")
     return FileResponse(path)
+
+
+def image_category(path: str, asset_type: str | None = None) -> str:
+    marker = f"{asset_type or ''} {path}".lower()
+    if "qa" in marker or "preview" in marker or "contact_sheet" in marker:
+        return "qa"
+    if any(value in marker for value in ("background", "map", "stage", "cinematic")):
+        return "background"
+    if any(value in marker for value in ("effect", "vfx", "skill", "hit_", "death_")):
+        return "vfx"
+    if any(value in marker for value in ("icon", "reward", "item")):
+        return "item"
+    if any(value in marker for value in ("monster", "boss", "mon_")):
+        return "monster"
+    if any(value in marker for value in ("character", "portrait", "avatar", "chr_", "npc_")):
+        return "character"
+    return "other"
+
+
+def image_is_source(path: str) -> bool:
+    name = Path(path).stem.lower()
+    return any(
+        marker in name
+        for marker in ("source", "chroma", "candidate", "raw", "mask", "matte", "debug")
+    )
+
+
+@app.get("/api/image-library")
+def image_library(db: Session = Depends(get_db)) -> dict:
+    root = settings.resolved_workspace_root
+    assets = list(db.scalars(select(Asset)))
+    approvals = list(db.scalars(select(Approval)))
+    asset_by_path = {
+        str(asset.file_path).replace("\\", "/"): asset
+        for asset in assets
+        if Path(asset.file_path).suffix.lower() in IMAGE_SUFFIXES
+    }
+    approval_by_path: dict[str, list[str]] = {}
+    for approval in approvals:
+        for preview_path in approval.preview_paths or []:
+            normalized = str(preview_path).replace("\\", "/")
+            if Path(normalized).suffix.lower() in IMAGE_SUFFIXES:
+                approval_by_path.setdefault(normalized, []).append(approval.status)
+
+    candidates = set(asset_by_path) | set(approval_by_path)
+    root_labels: dict[str, str] = {}
+    for label, relative_root in IMAGE_LIBRARY_ROOTS.items():
+        scan_root = resolve_workspace_path(relative_root)
+        if not scan_root.exists():
+            continue
+        for file_path in scan_root.rglob("*"):
+            if file_path.is_file() and file_path.suffix.lower() in IMAGE_SUFFIXES:
+                relative = file_path.relative_to(root).as_posix()
+                candidates.add(relative)
+                root_labels[relative] = label
+
+    items = []
+    for relative in candidates:
+        normalized = relative.replace("\\", "/")
+        try:
+            file_path = resolve_workspace_path(normalized)
+        except HTTPException:
+            continue
+        if not file_path.is_file() or file_path.suffix.lower() not in IMAGE_SUFFIXES:
+            continue
+        stat = file_path.stat()
+        asset = asset_by_path.get(normalized)
+        approval_statuses = approval_by_path.get(normalized, [])
+        sources = []
+        if asset:
+            sources.append("asset")
+        if approval_statuses:
+            sources.append("approval")
+        if normalized in root_labels:
+            sources.append("workspace")
+        items.append(
+            {
+                "path": normalized,
+                "file_name": file_path.name,
+                "url": f"/workspace-files/{normalized}",
+                "extension": file_path.suffix.lower().removeprefix("."),
+                "library_group": root_labels.get(normalized, "registered"),
+                "category": image_category(normalized, asset.asset_type if asset else None),
+                "is_source": image_is_source(normalized),
+                "is_animated": file_path.suffix.lower() == ".gif",
+                "size_bytes": stat.st_size,
+                "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                "sources": sources,
+                "asset_id": asset.asset_id if asset else None,
+                "asset_type": asset.asset_type if asset else None,
+                "asset_status": asset.status if asset else None,
+                "approval_statuses": sorted(set(approval_statuses)),
+                "frame_count": asset.frame_count if asset else None,
+                "fps": asset.fps if asset else None,
+            }
+        )
+
+    items.sort(key=lambda item: item["modified_at"], reverse=True)
+    return {
+        "items": items,
+        "total": len(items),
+        "categories": dict(Counter(item["category"] for item in items)),
+    }
 
 
 @app.get("/health")

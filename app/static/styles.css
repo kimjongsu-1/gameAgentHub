@@ -23,6 +23,9 @@ body {
 }
 main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0 72px; }
 header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 32px; }
+.header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.nav-link { color: var(--cyan); border: 1px solid rgba(65,217,199,.45); border-radius: 9px; padding: 8px 12px; text-decoration: none; font-size: .82rem; }
+.nav-link:hover { background: rgba(65,217,199,.08); }
 h1 { margin: 4px 0 8px; font-size: clamp(2rem, 5vw, 4.6rem); letter-spacing: -.055em; }
 h2 { margin: 0; font-size: 1.05rem; }
 .eyebrow { color: var(--cyan); font: 700 .72rem ui-monospace, monospace; letter-spacing: .18em; }
