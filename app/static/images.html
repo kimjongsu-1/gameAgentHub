@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>이미지 관리 · 게임 제작 통합 허브</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <link rel="stylesheet" href="/static/images.css">
+  <link rel="stylesheet" href="/static/styles.css?v=20260630-design-lanes">
+  <link rel="stylesheet" href="/static/images.css?v=20260630-design-lanes">
 </head>
 <body>
   <main class="image-library-page">
@@ -55,11 +55,26 @@
       </label>
     </section>
 
+    <nav id="design-group-filter" class="design-group-filter" aria-label="디자인 전문 그룹">
+      <button type="button" class="design-group-tab active" data-design-group="all" aria-pressed="true">
+        <span>전체 디자인</span><strong id="group-count-all">0</strong>
+      </button>
+      <button type="button" class="design-group-tab entity" data-design-group="entity_design" aria-pressed="false">
+        <span>캐릭터 · 몬스터 · NPC</span><strong id="group-count-entity_design">0</strong>
+      </button>
+      <button type="button" class="design-group-tab world" data-design-group="world_item_design" aria-pressed="false">
+        <span>맵 · 배경화면 · 아이템</span><strong id="group-count-world_item_design">0</strong>
+      </button>
+      <button type="button" class="design-group-tab skill" data-design-group="skill_vfx_design" aria-pressed="false">
+        <span>스킬 이펙트 · 스킬</span><strong id="group-count-skill_vfx_design">0</strong>
+      </button>
+    </nav>
+
     <section class="library-result-bar">
       <strong id="result-count">0개</strong>
       <span id="library-message" class="subtitle">이미지를 찾고 있습니다.</span>
     </section>
-    <section id="image-grid" class="image-grid" aria-live="polite"></section>
+    <section id="image-grid" class="design-lanes" aria-live="polite"></section>
   </main>
 
   <div id="image-lightbox" class="image-lightbox" hidden>
@@ -78,6 +93,6 @@
       </div>
     </section>
   </div>
-  <script src="/static/images.js"></script>
+  <script src="/static/images.js?v=20260630-design-lanes"></script>
 </body>
 </html>

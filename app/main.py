@@ -597,17 +597,39 @@ def image_category(path: str, asset_type: str | None = None) -> str:
     marker = f"{asset_type or ''} {path}".lower()
     if "qa" in marker or "preview" in marker or "contact_sheet" in marker:
         return "qa"
+    if any(value in marker for value in ("icon", "reward", "item")):
+        return "item"
     if any(value in marker for value in ("background", "map", "stage", "cinematic")):
         return "background"
     if any(value in marker for value in ("effect", "vfx", "skill", "hit_", "death_")):
         return "vfx"
-    if any(value in marker for value in ("icon", "reward", "item")):
-        return "item"
     if any(value in marker for value in ("monster", "boss", "mon_")):
         return "monster"
     if any(value in marker for value in ("character", "portrait", "avatar", "chr_", "npc_")):
         return "character"
     return "other"
+
+
+def image_design_group(path: str, asset_type: str | None = None) -> str:
+    marker = f"{asset_type or ''} {path}".lower()
+    normalized_type = (asset_type or "").upper()
+    if normalized_type.startswith("VFX") or any(
+        value in marker for value in ("vfx", "effect", "skill", "pulse_strike", "ground_crack")
+    ):
+        return "skill_vfx_design"
+    if normalized_type in {"BACKGROUND", "BACKGROUND_LAYER", "ITEM", "ITEM_ICON", "ICON"} or any(
+        value in marker for value in ("background", "map", "environment", "cinematic", "icon", "reward", "item")
+    ):
+        return "world_item_design"
+    if normalized_type in {"SPRITE_SHEET", "CHARACTER", "MONSTER", "NPC", "PORTRAIT"} or any(
+        value in marker
+        for value in (
+            "character", "monster", "boss", "portrait", "avatar", "chr_", "mon_", "npc_",
+            "protagonist", "wraith", "infantry", "dueoksini", "bari", "캐릭터", "몬스터",
+        )
+    ):
+        return "entity_design"
+    return "entity_design"
 
 
 def image_is_source(path: str) -> bool:
@@ -674,6 +696,7 @@ def image_library(db: Session = Depends(get_db)) -> dict:
                 "extension": file_path.suffix.lower().removeprefix("."),
                 "library_group": root_labels.get(normalized, "registered"),
                 "category": image_category(normalized, asset.asset_type if asset else None),
+                "design_group": image_design_group(normalized, asset.asset_type if asset else None),
                 "is_source": image_is_source(normalized),
                 "is_animated": file_path.suffix.lower() == ".gif",
                 "size_bytes": stat.st_size,
@@ -693,6 +716,7 @@ def image_library(db: Session = Depends(get_db)) -> dict:
         "items": items,
         "total": len(items),
         "categories": dict(Counter(item["category"] for item in items)),
+        "design_groups": dict(Counter(item["design_group"] for item in items)),
     }
 
 

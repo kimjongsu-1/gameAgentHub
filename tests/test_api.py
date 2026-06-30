@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.config import get_settings
-from app.main import app
+from app.main import app, image_design_group
 
 
 PNG_1X1 = (
@@ -56,8 +56,15 @@ def test_image_library_page_and_workspace_scan():
         payload = response.json()
         saved = next(item for item in payload["items"] if item["file_name"] == "library_test.gif")
         assert saved["category"] == "qa"
+        assert saved["design_group"] == "entity_design"
         assert saved["is_animated"] is True
         assert saved["path"] == "05_sprites/qa/library_test.gif"
+
+
+def test_image_design_group_matches_design_specializations():
+    assert image_design_group("05_sprites/qa/monster/walk/preview.gif") == "entity_design"
+    assert image_design_group("07_cinematics/STAGE01_BG_far.png", "BACKGROUND_LAYER") == "world_item_design"
+    assert image_design_group("05_sprites/qa/VFX_pulse_strike/preview.gif") == "skill_vfx_design"
 
 
 def test_design_handoff_package_documents_user_planning_and_local_qa():
@@ -80,6 +87,10 @@ def test_design_handoff_package_documents_user_planning_and_local_qa():
         assert "발바닥 기준점은 모든 프레임에서 같은 y좌표" in package["prompt"]
         assert "프레임 위치가 흔들리면 재작업 대상" in package["prompt"]
         assert package["design_profile_id"] == "entity_design"
+        assert "camera ~50 degrees above ground" in package["prompt"]
+        assert "strict SD 2-head ratio" in package["prompt"]
+        assert "exact 1024x1024 PNG" in package["prompt"]
+        assert "idle/walk loop center drift <= 1px, size change <= 2%" in package["prompt"]
         assert "시각 중심과 전체 크기를 프레임마다 고정" in package["prompt"]
 
 

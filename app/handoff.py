@@ -17,6 +17,37 @@ DESIGN_PROFILES = {
     "entity_design": {
         "name": "캐릭터 · 몬스터 · NPC",
         "prompt_profile": "design_entity_v1",
+        "prompt_template": """2.5D quarter-view idle-RPG character, strict SD 2-head proportions,
+bold readable silhouette for small mobile screen,
+high-angle three-quarter top-down view, camera ~50 degrees above ground,
+crown of the head and tops of the shoulders visible,
+gentle perspective foreshortening toward the feet,
+cel-shaded anime art, clean bold outline, vivid flat colors,
+single key light from upper-left, soft ambient fill, no rim light,
+soft round contact shadow centered under the feet,
+{IDENTITY}: face, body, silhouette, outfit, equipment — locked,
+idle stance, facing south, toward the lower screen, face visible,
+full body, feet on baseline, bottom-center pivot,
+transparent background, centered, single subject
+
+[FACING — replace only the facing line above]
+S front: facing south, toward the lower screen, face visible
+N back: facing north, away from camera, back of head and shoulders visible
+E right: facing east, screen-right, three-quarter profile
+W left: horizontally flip E; do not generate separately
+
+[CONSTRAINTS]
+- fixed camera: high-angle 3/4 top-down only, never eye-level, never front-on
+- top plane of head and shoulders visible in every direction
+- key light locked upper-left, contact shadow centered, light direction never changes
+- identity locked across all directions and frames: same face, body, silhouette, outfit, equipment, palette, proportions
+- single subject only, no props, no background, no text, no extra characters
+- strict SD 2-head ratio: head is 50% of total character height, silhouette must read at small mobile size
+- visual center of head/torso/pelvis and overall size held constant per frame
+- idle/walk loop center drift <= 1px, size change <= 2%
+- feet on baseline, bottom-center pivot (x=0.5, y=1.0)
+- game animation sheet standard: exact 1024x1024 PNG, 4x4 grid, exactly 16 frames, each cell exactly 256x256, 6fps
+- do not blend different generation candidates as consecutive frames""",
         "required_outputs": [
             "투명 배경 원본 PNG와 정면 기준 이미지",
             "식별 요소·색상·비율을 기록한 디자인 명세",
@@ -25,10 +56,11 @@ DESIGN_PROFILES = {
         ],
         "requirements": [
             "캐릭터, 몬스터, NPC의 얼굴·체형·실루엣·의상·장비 식별 요소를 모든 결과에서 동일하게 유지한다.",
-            "SD 2.5등신 비율과 모바일 축소 화면에서 읽히는 실루엣을 우선한다.",
+            "정확한 SD 2등신(머리 1 : 몸 1) 비율과 모바일 축소 화면에서 읽히는 실루엣을 우선한다.",
             "애니메이션은 외곽 bbox만 맞추지 말고 머리·몸통·골반의 시각 중심과 전체 크기를 프레임마다 고정한다.",
             "대기/걷기 루프의 좌우·상하 중심 이동은 1px 이하, 의도하지 않은 크기 변화는 2% 이하로 제한한다.",
             "발바닥 기준선과 bottom-center pivot(x=0.5, y=1.0)을 유지한다.",
+            "게임용 16프레임 시트는 정확히 1024x1024 PNG, 4x4 배열, 셀당 256x256, 6fps로 제작한다.",
             "서로 다른 생성 후보를 한 애니메이션의 연속 프레임처럼 섞지 않는다.",
         ],
     },
@@ -133,6 +165,7 @@ def build_handoff_package(task: Task, worker: dict[str, Any], workspace_root: Pa
         profile_id, design_profile = design_profile_for_task(task)
     required_outputs = required_outputs_for(role, design_profile)
     profile_requirements = design_profile["requirements"] if design_profile else []
+    profile_template = design_profile.get("prompt_template") if design_profile else None
     alignment_requirements = design_alignment_requirements() if role == "design_orchestra" and profile_id == "entity_design" else []
     payload = {
         "schema_version": 2,
@@ -170,7 +203,7 @@ def build_handoff_package(task: Task, worker: dict[str, Any], workspace_root: Pa
         "- 기획/자료조사는 사용자가 직접 제공한 내용을 기준으로 한다.",
         "- 반복 검사는 무료 로컬 QA를 우선 사용한다.",
         "- 외부 AI API를 자동 호출하지 않는다.",
-        *( ["", f"전문 제작군: {design_profile['name']}", f"프롬프트 프로필: {design_profile['prompt_profile']}", *profile_lines] if design_profile else [] ),
+        *( ["", f"전문 제작군: {design_profile['name']}", f"프롬프트 프로필: {design_profile['prompt_profile']}", *(["", "캐릭터 제작 기본 프롬프트:", profile_template] if profile_template else []), *profile_lines] if design_profile else [] ),
         "",
         "필수 결과물:",
         *output_lines,

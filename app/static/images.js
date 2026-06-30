@@ -3,7 +3,13 @@ const categoryLabels = {
   character: "캐릭터", monster: "몬스터", background: "맵·배경",
   vfx: "이펙트", item: "아이템", qa: "QA", other: "기타",
 };
+const designGroups = [
+  { id: "entity_design", label: "캐릭터 · 몬스터 · NPC", description: "캐릭터 원화, 몬스터, NPC 초상과 애니메이션", className: "entity" },
+  { id: "world_item_design", label: "맵 · 배경화면 · 아이템", description: "스테이지 배경, 맵 레이어, 아이콘과 아이템", className: "world" },
+  { id: "skill_vfx_design", label: "스킬 이펙트 · 스킬", description: "전투 스킬, 타격 효과와 VFX 애니메이션", className: "skill" },
+];
 let libraryItems = [];
+let selectedDesignGroup = "all";
 
 function escapeHtml(value) {
   const node = document.createElement("div");
@@ -38,6 +44,7 @@ function filteredItems() {
     return (!query || haystack.includes(query))
       && (category === "all" || item.category === category)
       && (status === "all" || itemStatus(item) === status)
+      && (selectedDesignGroup === "all" || item.design_group === selectedDesignGroup)
       && (includeSources || !item.is_source);
   });
 }
@@ -68,9 +75,27 @@ function render() {
   byId("library-message").textContent = items.length === libraryItems.length
     ? "전체 이미지"
     : `전체 ${libraryItems.length}개 중 필터 결과`;
+  const groupsToRender = selectedDesignGroup === "all"
+    ? designGroups
+    : designGroups.filter((group) => group.id === selectedDesignGroup);
   byId("image-grid").innerHTML = items.length
-    ? items.map((item) => card(item, libraryItems.indexOf(item))).join("")
+    ? groupsToRender.map((group) => {
+        const groupItems = items.filter((item) => item.design_group === group.id);
+        if (!groupItems.length) return "";
+        return `<section class="design-lane ${group.className}" aria-labelledby="lane-${group.id}">
+          <header class="design-lane-header">
+            <div><p class="eyebrow">DESIGN SPECIALIZATION</p><h2 id="lane-${group.id}">${group.label}</h2><p>${group.description}</p></div>
+            <strong>${groupItems.length}개</strong>
+          </header>
+          <div class="image-grid">${groupItems.map((item) => card(item, libraryItems.indexOf(item))).join("")}</div>
+        </section>`;
+      }).join("")
     : '<div class="image-empty">조건에 맞는 이미지가 없습니다.</div>';
+
+  designGroups.forEach((group) => {
+    byId(`group-count-${group.id}`).textContent = libraryItems.filter((item) => item.design_group === group.id).length;
+  });
+  byId("group-count-all").textContent = libraryItems.length;
 }
 
 function metaRow(label, value) {
@@ -120,6 +145,17 @@ async function loadLibrary() {
 
 ["image-search", "category-filter", "status-filter", "source-toggle"].forEach((id) => {
   byId(id).addEventListener(id === "image-search" ? "input" : "change", render);
+});
+byId("design-group-filter").addEventListener("click", (event) => {
+  const target = event.target.closest("[data-design-group]");
+  if (!target) return;
+  selectedDesignGroup = target.dataset.designGroup;
+  document.querySelectorAll("[data-design-group]").forEach((button) => {
+    const active = button === target;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  render();
 });
 byId("image-grid").addEventListener("click", (event) => {
   const target = event.target.closest("[data-image-index]");
