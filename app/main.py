@@ -105,6 +105,7 @@ def _legacy_pipeline_stage_status(db: Session) -> list[dict]:
                 "task_counts": counts,
                 "paused": bool(counts.get("PAUSED", 0)),
                 "active": bool(counts.get("RUNNING", 0)),
+                "specializations": agents.get("design_specializations", []) if role == "design_orchestra" else [],
             }
         )
     return stages
@@ -197,6 +198,9 @@ def pipeline_stage_status(db: Session) -> list[dict]:
                 "task_counts": counts,
                 "paused": bool(counts.get("PAUSED", 0)),
                 "active": bool(counts.get("RUNNING", 0)),
+                "specializations": (
+                    agents.get("design_specializations", []) if role == "design_orchestra" else []
+                ),
             }
         )
     return stages
@@ -230,7 +234,7 @@ def pipeline_architecture_status(db: Session) -> dict:
         "flow": [
             {"step": 1, "owner": "User", "action": "기획과 자료조사를 직접 작성"},
             {"step": 2, "owner": "MCP PM", "action": "사용자 기획을 작업 지시서로 정리하고 디자인 작업 생성"},
-            {"step": 3, "owner": "Design Orchestra", "action": "캐릭터 디자인, 16프레임 스프라이트, 애니메이션 소스 제작"},
+            {"step": 3, "owner": "Design Orchestra", "action": "생명체 / 환경·아이템 / 스킬·VFX 전용 프롬프트로 디자인 제작"},
             {"step": 4, "owner": "Local Free QA", "action": "Sprite QA, GIF, 컨택트시트, 어니언스킨, 런타임 보고서로 반복 검사"},
             {"step": 5, "owner": "User", "action": "미적/게임성 최종 승인"},
             {"step": 6, "owner": "Game Development", "action": "사용자가 게임개발 시작을 허가한 뒤 승인 에셋만 Unity에 적용"},

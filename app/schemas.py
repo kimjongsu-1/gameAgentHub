@@ -143,6 +143,9 @@ class HandoffPackageRead(BaseModel):
     target_role: str
     target_thread_id: str
     target_thread_title: str
+    design_profile_id: str | None = None
+    design_profile_name: str | None = None
+    prompt_profile: str | None = None
     markdown_path: str
     json_path: str
     prompt: str

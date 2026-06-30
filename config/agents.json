@@ -23,13 +23,33 @@
     "owner": "local_hub",
     "description": "반복 검사는 외부 AI API를 호출하지 않고 로컬 Sprite QA와 런타임 보고서 등록으로 처리한다."
   },
+  "design_specializations": [
+    {
+      "id": "entity_design",
+      "name": "캐릭터 · 몬스터 · NPC",
+      "prompt_profile": "design_entity_v1",
+      "accepts": ["character_design", "monster_design", "boss_monster_design", "npc_design", "sprite_16_frame", "animation_source", "character_consistency_test", "monster_consistency_test", "boss_monster_consistency_test"]
+    },
+    {
+      "id": "world_item_design",
+      "name": "맵 · 배경화면 · 아이템",
+      "prompt_profile": "design_world_item_v1",
+      "accepts": ["map_design", "background_design", "environment_design", "item_design", "icon_design", "map_consistency_test", "item_consistency_test"]
+    },
+    {
+      "id": "skill_vfx_design",
+      "name": "스킬 이펙트 · 스킬",
+      "prompt_profile": "design_skill_vfx_v1",
+      "accepts": ["skill_design", "skill_effect", "combat_vfx", "vfx_animation", "skill_animation"]
+    }
+  ],
   "workers": [
     {
       "role": "design_orchestra",
       "thread_id": "019f13f1-1421-7601-908e-0ce38c4149e7",
       "thread_title": "게임 개발 디자인",
       "cwd": "C:\\Users\\kukl3\\Documents\\게임 개발 프로젝트",
-      "accepts": ["character_design", "sprite_16_frame", "animation_source"],
+      "accepts": ["entity_design", "world_item_design", "skill_vfx_design"],
       "requires_user_approval": true
     },
     {
@@ -41,5 +61,5 @@
       "requires_status": ["QA_PASS", "APPROVED"]
     }
   ],
-  "handoff_rule": "user_direct_planning -> orchestrator -> design_orchestra -> local_free_qa -> user_approval -> game_development"
+  "handoff_rule": "user_direct_planning -> orchestrator -> design_orchestra(profile: entity | world_item | skill_vfx) -> local_free_qa -> user_approval -> game_development"
 }

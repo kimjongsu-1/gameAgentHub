@@ -129,7 +129,10 @@ python -m pytest -q
 
 - 총괄: 현재 `통합 제작 파이프라인 구축`
 - 기획·자료조사: 사용자가 직접 수행
-- 디자인·16프레임: 기존 `게임 개발 디자인`
+- 디자인: 기존 `게임 개발 디자인` 채팅 안에서 아래 3개 전문 프롬프트로 자동 분류
+  - 캐릭터 · 몬스터 · NPC (`design_entity_v1`)
+  - 맵 · 배경화면 · 아이템 (`design_world_item_v1`)
+  - 스킬 이펙트 · 스킬 (`design_skill_vfx_v1`)
 - Unity 구현: 기존 `게임개발`
 
 제목은 표시용이며 실제 라우팅은 [config/agents.json](config/agents.json)의 `thread_id`를 사용합니다.

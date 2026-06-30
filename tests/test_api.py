@@ -35,6 +35,11 @@ def test_health_and_agents():
             "게임 개발 디자인",
             "게임개발",
         }
+        assert [item["id"] for item in agents["design_specializations"]] == [
+            "entity_design",
+            "world_item_design",
+            "skill_vfx_design",
+        ]
 
 
 def test_image_library_page_and_workspace_scan():
@@ -74,6 +79,30 @@ def test_design_handoff_package_documents_user_planning_and_local_qa():
         assert "반복 검사는 무료 로컬 QA" in package["prompt"]
         assert "발바닥 기준점은 모든 프레임에서 같은 y좌표" in package["prompt"]
         assert "프레임 위치가 흔들리면 재작업 대상" in package["prompt"]
+        assert package["design_profile_id"] == "entity_design"
+        assert "시각 중심과 전체 크기를 프레임마다 고정" in package["prompt"]
+
+
+def test_design_handoff_selects_world_item_and_skill_profiles():
+    cases = [
+        ("stage_background", "world_item_design", "맵 · 배경화면 · 아이템", "전경·중경·후경"),
+        ("skill_effect", "skill_vfx_design", "스킬 이펙트 · 스킬", "anticipation, impact, recovery"),
+    ]
+    with TestClient(app) as client:
+        for task_type, profile_id, profile_name, expected_text in cases:
+            task = client.post(
+                "/api/tasks",
+                json={
+                    "title": f"프로필 테스트 {task_type}",
+                    "task_type": task_type,
+                    "assignee_role": "design_orchestra",
+                    "input_payload": {},
+                },
+            ).json()
+            package = client.post(f"/api/tasks/{task['id']}/handoff-package").json()
+            assert package["design_profile_id"] == profile_id
+            assert package["design_profile_name"] == profile_name
+            assert expected_text in package["prompt"]
 
 
 def test_task_approval_flow_without_linked_game_asset():

@@ -74,11 +74,15 @@ function pipelineStageRow(stage) {
     .map(([name, value]) => `${name}:${value}`)
     .join(" · ") || "작업 없음";
   const description = stage.description ? `<small>${escapeHtml(stage.description)}</small>` : "";
+  const specializations = (stage.specializations || []).length
+    ? `<div class="specialization-list">${stage.specializations.map((item) => `<span>${escapeHtml(item.name)}</span>`).join("")}</div>`
+    : "";
   return `<div class="stage-card ${stage.configured ? "" : "needs-config"}">
     <strong>${escapeHtml(stage.thread_title)}</strong>
     <span>${flags.map(escapeHtml).join(" · ")}</span>
     <small>${escapeHtml(stage.role)} · ${escapeHtml(counts)}</small>
     ${description}
+    ${specializations}
   </div>`;
 }
 
