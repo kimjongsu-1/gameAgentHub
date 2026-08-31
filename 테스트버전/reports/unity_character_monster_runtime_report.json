@@ -1,0 +1,52 @@
+{
+  "status": "PASS",
+  "map_asset": "MAP_SEAMLESS_GRASS_4096_PROMPT_TEST_V03",
+  "map_resolution": [
+    4096,
+    4096
+  ],
+  "map_opposite_edges_exact": true,
+  "runtime_background_mode": "TILED_REPEAT",
+  "screen_edge_map_coverage_ratio": 1.0,
+  "runtime_resolution": [
+    1280,
+    720
+  ],
+  "runtime_fps": 6,
+  "captured_frames": 12,
+  "all_adjacent_frames_changed": true,
+  "changed_pixels_between_adjacent_frames": [
+    13362,
+    13032,
+    12729,
+    11733,
+    10838,
+    13248,
+    16143,
+    17194,
+    16004,
+    14746,
+    13313
+  ],
+  "hero": {
+    "motion": "walk",
+    "moving": true
+  },
+  "monsters": {
+    "types": 5,
+    "motions": [
+      "run",
+      "hit",
+      "attack"
+    ],
+    "moving": true
+  },
+  "unity": {
+    "safe_clone": "C:\\game\\character_pipeline\\IdleBattleUnity_SubsetTest_20260701",
+    "editor": "6000.3.18f1",
+    "original_project_untouched": true,
+    "executable": "C:\\game\\character_pipeline\\IdleBattleUnity_SubsetTest_20260701\\Build\\GrasslandMotionTest\\GrasslandMotionTest.exe",
+    "runtime_process_id": 27176
+  },
+  "runtime_gif": "08_runtime_captures/grassland_character_monster_unity_6fps.gif"
+}
