@@ -22,6 +22,12 @@ def file_checksum(path: Path) -> str:
     return f"sha256:{digest.hexdigest()}"
 
 
+def checksum_matches(path: Path, expected: str) -> bool:
+    actual = file_checksum(path)
+    normalized_expected = expected if expected.startswith("sha256:") else f"sha256:{expected}"
+    return actual == normalized_expected
+
+
 def promote_approved_assets(db: Session, approval: Approval, workspace_root: Path) -> list[Asset]:
     promoted = []
     for link in approval.linked_assets:
@@ -29,11 +35,11 @@ def promote_approved_assets(db: Session, approval: Approval, workspace_root: Pat
         source = (workspace_root / asset.file_path).resolve()
         if not source.is_relative_to(workspace_root) or not source.is_file():
             raise ValueError(f"Approved asset source is invalid: {asset.file_path}")
-        if file_checksum(source) != asset.checksum:
+        if not checksum_matches(source, asset.checksum):
             raise ValueError(f"Approved asset checksum changed: {asset.asset_id}")
         destination = (workspace_root / "05_sprites" / "approved" / source.name).resolve()
         destination.parent.mkdir(parents=True, exist_ok=True)
-        if destination.exists() and file_checksum(destination) != asset.checksum:
+        if destination.exists() and not checksum_matches(destination, asset.checksum):
             raise ValueError(f"Approved destination already contains different data: {destination.name}")
         if not destination.exists():
             shutil.copy2(source, destination)

@@ -1,0 +1,32 @@
+{
+  "status": "SUCCESS",
+  "task_id": "34a45172-a9fa-447e-8bbe-000c0ea5bb07",
+  "test_scope": {
+    "protagonist": "CHR_PROTAGONIST_REBUILD_V01_WALK_SOUTH",
+    "protagonist_motions": ["walk"],
+    "monster_types": ["INFANTRY", "BEAST", "WRAITH", "HEAVY", "GIANT"],
+    "monster_palette": "ABYSS",
+    "monster_motions": ["run", "hit", "attack"],
+    "fps": 6
+  },
+  "qa": {
+    "protagonist_height_variation_percent": 0.0,
+    "protagonist_mass_center_x_range_px": 0.914,
+    "monster_body_height_variation_percent": 0.0,
+    "monster_max_center_drift_px": 0.0239,
+    "status": "PASS"
+  },
+  "unity": {
+    "original_project_untouched": true,
+    "safe_clone": "C:/game/character_pipeline/IdleBattleUnity_SubsetTest_20260701",
+    "editor": "6000.3.18f1",
+    "approved_packages": 16,
+    "imports_succeeded": 16,
+    "imports_failed": 0,
+    "compile_errors": 0,
+    "build_succeeded": true,
+    "executable": "C:/game/character_pipeline/IdleBattleUnity_SubsetTest_20260701/Build/SubsetMotionTest/SubsetMotionTest.exe",
+    "runtime_process_id": 9076
+  },
+  "capture": "08_runtime_captures/subset_motion_test_unity_20260701.png"
+}

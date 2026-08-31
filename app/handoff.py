@@ -47,6 +47,11 @@ W left: horizontally flip E; do not generate separately
 - idle/walk loop center drift <= 1px, size change <= 2%
 - feet on baseline, bottom-center pivot (x=0.5, y=1.0)
 - game animation sheet standard: exact 1024x1024 PNG, 4x4 grid, exactly 16 frames, each cell exactly 256x256, 6fps
+- transparent RGBA PNG output; each frame subject, weapon, hair and effects must stay inside a centered 192x192 safe area
+- keep at least 32px transparent padding on every side of every 256x256 cell; never cross or overlap cell boundaries
+- lock the visual center and baseline across all 16 frames; bottom-center pivot remains fixed
+- monster run, hit and attack sheets use the exact same sheet, cell, safe-area, axis-lock, pivot, frame-count and 6fps rules as character sheets
+- monster body/head horizontal visual-mass drift must be <= 0.25px across every run, hit and attack loop
 - do not blend different generation candidates as consecutive frames""",
         "required_outputs": [
             "투명 배경 원본 PNG와 정면 기준 이미지",

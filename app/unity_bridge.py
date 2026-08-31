@@ -86,7 +86,11 @@ def stage_unity_import(
         raise UnityBridgeError(f"Approved PNG does not exist: {source}")
     expected_checksum = manifest.get("checksum")
     actual_checksum = sha256_file(source)
-    if expected_checksum and expected_checksum != actual_checksum:
+    if expected_checksum:
+        normalized_expected = expected_checksum if str(expected_checksum).startswith("sha256:") else f"sha256:{expected_checksum}"
+    else:
+        normalized_expected = None
+    if normalized_expected and normalized_expected != actual_checksum:
         raise UnityBridgeError("Source checksum does not match the approved manifest")
 
     asset_id = manifest["asset_id"]

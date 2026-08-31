@@ -50,6 +50,21 @@ def test_stage_approved_unity_package(tmp_path):
     assert Path(receipt["source_path"]).is_file()
 
 
+def test_stage_accepts_legacy_checksum_without_prefix(tmp_path):
+    manifest, qa = make_approved_files(tmp_path)
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["checksum"] = payload["checksum"].removeprefix("sha256:")
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+    receipt = stage_unity_import(
+        manifest,
+        qa,
+        tmp_path / "06_game" / "legacy_checksum_import",
+        UnityImportConfig(resource_name="LegacyChecksumWalk"),
+    )
+    assert Path(receipt["source_path"]).is_file()
+
+
 def test_unity_staging_rejects_unapproved_asset(tmp_path):
     manifest, qa = make_approved_files(tmp_path, status="QA_PASS")
     with pytest.raises(UnityBridgeError, match="APPROVED"):

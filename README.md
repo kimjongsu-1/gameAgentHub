@@ -1,113 +1,196 @@
-# 게임 제작 통합 허브
+# GameAgentHub
 
-1인 모바일 방치형 게임의 디자인, 16프레임 스프라이트, QA, 사용자 승인, Unity 적용을 하나의 상태 기반 파이프라인으로 관리하는 로컬 허브입니다.
+MCP 기반 로컬 AI 에이전트 자동화 허브입니다. 자연어 작업 지시를 로컬 문서 분석, 작업 분기, 이미지 에셋 생성 요청, 후처리, QA 검증, 승인 게이트, Unity 전달 준비까지 이어지는 반복 가능한 파이프라인으로 구성했습니다.
 
-## 현재 범위
+이 저장소의 핵심은 특정 게임 콘텐츠보다, 생성형 AI 결과물을 실제 프로젝트 리소스로 만들기 위한 로컬 자동화 구조입니다.
 
-- FastAPI 작업·에셋·승인·API 사용량 API
-- PostgreSQL 영속 저장소와 Docker Compose
-- SQLite 기반 단독 실행 폴백
-- 기존 Codex 채팅의 고유 스레드 ID 라우팅
-- 승인 대기와 월간 API 비용을 보여주는 대시보드
-- 4×4 16프레임 Sprite QA와 GIF·컨택트시트·어니언스킨 생성
-- 디자인/게임개발 채팅용 표준 전달 패키지 생성
-- 미리보기 기반 승인·재작업·거절 UI
-- QA PASS와 사용자 승인을 모두 요구하는 게임개발 전달 큐
-- 승인 manifest와 체크섬을 검증하는 Unity Import 패키지
-- Unity Import·런타임 결과 보고서 회수 API
-- 재현 가능한 에셋 manifest JSON Schema
-- MCP 총괄 PM 서버 골격과 planning/design/development 작업 라우팅
-- 역할별 파이프라인 중지/재개 API와 대시보드 상태 표시
+## 핵심 구현
 
-외부 AI API 호출과 이미지 생성은 아직 활성화하지 않았습니다. 채팅 자동 전송 워커는 활성화되어 승인된 전달 큐를 5분 간격으로 처리합니다. Unity 프로젝트 변경은 `게임개발` 채팅이 승인 패키지를 받은 경우에만 수행합니다.
+- FastAPI 기반 로컬 컨트롤 허브
+- MCP 서버를 통한 외부 에이전트/작업 채팅 연동
+- 작업 지시, 상태, 승인, 전달 결과를 추적하는 API
+- PostgreSQL 및 SQLite 실행 모드 지원
+- Docker Compose 기반 실행 환경
+- 로컬 파일 시스템 기반 산출물 관리
+- Python/Pillow 기반 이미지 후처리 및 스프라이트 QA
+- JSON manifest 기반 산출물 추적
+- 사용자 승인 전 downstream 전달을 차단하는 게이트 구조
 
-## Sprite QA
+## MCP 서버 구성
 
-시트는 먼저 `05_sprites/work` 아래에 복사하고 워크스페이스 상대 경로로 실행합니다.
+MCP 서버는 로컬 허브 API를 감싸는 tool interface 역할을 합니다. 에이전트는 직접 DB를 만지는 대신 MCP tool을 호출하고, MCP 서버는 허브 API에 요청을 전달합니다.
 
-```powershell
-docker compose exec api python -m app.sprite_qa `
-  /workspace/05_sprites/work/character_walk.png `
-  /workspace/05_sprites/qa/character_walk `
-  --columns 4 --rows 4 --frames 16 --fps 12
+주요 구성은 다음과 같습니다.
+
+- `mcp_server/pm_server.py`
+  - PM/오케스트레이션용 MCP 서버
+  - 작업 생성, 상태 조회, 승인 패키지 생성, downstream 전달 요청을 tool 형태로 제공
+
+- `app/main.py`
+  - FastAPI 애플리케이션 진입점
+  - 작업, 승인, 이미지, Unity bridge, runtime report 관련 API 라우팅
+
+- `app/workflow.py`
+  - 작업 상태 전이와 승인 루프 제어
+  - 생성 → QA → 승인 대기 → 전달 가능 상태를 분리
+
+- `app/handoff.py`
+  - 에이전트/작업 채팅 간 전달 패키지 생성
+  - 작업 지시와 산출물 정보를 Markdown/JSON 형태로 정리
+
+- `app/unity_bridge.py`
+  - 승인된 산출물만 Unity 전달 패키지로 변환
+  - 미승인 리소스가 개발 단계로 흘러가는 것을 방지
+
+## 자동 작업 루프
+
+파이프라인은 한 번의 생성으로 끝나지 않고, 결과를 다시 검수하고 다음 단계 입력으로 넘기는 루프 형태로 설계했습니다.
+
+```text
+사용자 지시
+  ↓
+로컬 문서/이전 산출물 분석
+  ↓
+작업 명세 추출
+  ↓
+프롬프트 및 작업 패키지 생성
+  ↓
+이미지 생성 또는 로컬 처리 실행
+  ↓
+투명화/리사이즈/스프라이트 시트 후처리
+  ↓
+QA 검사 및 manifest 생성
+  ↓
+사용자 승인 대기
+  ↓
+승인된 경우에만 Unity 전달 패키지 생성
 ```
 
-초록 배경을 투명화하면서 검사할 때는 `--chroma-key "#00ff00"`를 추가합니다. 자동 투명화는 색상과 형태를 다시 그리지 않습니다.
+이 구조를 둔 이유는 생성형 AI 결과물이 매번 규격, 비율, 방향, 배경, 외곽선 품질이 흔들릴 수 있기 때문입니다. 자동화가 잘못된 결과물을 곧바로 개발 단계에 반영하지 않도록, QA와 사용자 승인을 별도 게이트로 분리했습니다.
 
-출력:
+## 사용자 승인 게이트를 넣은 이유
 
-- `preview.gif`
-- `contact_sheet.png`
-- `onion_skin.gif`
-- `qa_report.md`
-- `qa_result.json`
+자동화 파이프라인에서 가장 위험한 지점은 “그럴듯하지만 규격이 틀린 결과물”이 다음 단계로 넘어가는 것입니다. 특히 이미지 에셋은 Unity prefab, atlas, animation controller에 한 번 반영되면 되돌리는 비용이 커집니다.
 
-자동 검사는 빈 프레임, 셀 가장자리 접촉, 중복, 몸 중심·발 기준 흔들림, 크기 변화를 확인합니다. 얼굴, 의상, 무기, 타격감과 루프의 미적 완성도는 반드시 사람이 최종 확인합니다.
+승인 게이트는 다음 문제를 막기 위해 설계했습니다.
 
-## 승인과 게임개발 전달
+- 잘못된 프레임 수나 셀 크기의 시트가 등록되는 문제
+- pivot, baseline, center alignment가 맞지 않는 리소스가 downstream으로 전달되는 문제
+- 크로마키 잔여물, 투명화 실패, 외곽선 오염이 있는 PNG가 반영되는 문제
+- 사용자가 승인하지 않은 디자인 방향이 개발 리소스에 섞이는 문제
+- 자동 루프가 오류 결과물을 반복 확산시키는 문제
 
-대시보드의 승인 대기 카드에서 미리보기를 확인하고 `승인`, `재작업`, `거절`을 선택합니다.
+따라서 이 프로젝트는 `자동 생성`보다 `검수 가능한 자동화`에 초점을 두었습니다.
 
-게임개발 전달 큐는 다음 조건을 모두 만족할 때만 생성됩니다.
+## 로컬 기반 환경 활용
 
-1. 승인 유형이 16프레임 게임 에셋 유형일 것
-2. Sprite QA 결과가 `PASS`일 것
-3. 사용자가 대시보드에서 최종 승인할 것
+외부 API 의존도를 낮추고 재현 가능한 작업 환경을 만들기 위해 로컬 실행을 중심으로 구성했습니다.
 
-전달 큐는 중복 승인을 거부하며, 전송 워커는 항목을 먼저 선점한 뒤 성공 시 `SENT`, 실패 시 `FAILED`로 기록합니다.
+- Ollama 로컬 LLM
+  - 문서 요약, 작업 명세 정리, 프롬프트 초안 작성, QA 체크리스트 구성에 활용
+  - 네트워크 장애 및 API 비용 영향을 줄이기 위한 로컬 추론 환경
 
-## Unity Bridge
+- Python
+  - 이미지 후처리 스크립트, manifest 생성, 파일 검증, 자동 등록 도구 구현
 
-승인된 PNG를 Unity로 보내기 전에 별도 패키지를 생성합니다. 자세한 사용법은 [06_game/unity_bridge/README.md](06_game/unity_bridge/README.md)를 참고합니다.
+- Pillow
+  - RGBA 변환, 크로마키 제거, 알파 채널 검증
+  - bounding box 추출, sprite cell 배치, GIF 미리보기 생성
 
-Unity 쪽 Import 결과 JSON과 캡처를 `08_runtime_captures`로 가져온 뒤 `/api/runtime-reports`에 등록하면 해당 게임 작업이 `RUNTIME_QA` 또는 `REVISION_REQUIRED`로 변경됩니다.
+- 로컬 파일 시스템
+  - 원본, 중간 산출물, 최종 PNG/GIF, QA report를 프로젝트 폴더 아래에 저장
+  - manifest에 경로와 검수 결과를 기록해 추적성 확보
 
-## SuperGrok 수동 애니메이션/컷신 패키지
+## 이미지/스프라이트 후처리 자동화
 
-Grok/xAI API를 호출하지 않고, 사용자가 SuperGrok에 직접 넣을 수 있는 요청 패키지를 만들 수 있습니다.
+생성형 이미지 결과물을 그대로 쓰지 않고, 로컬 후처리 과정을 거쳐 프로젝트 리소스로 변환했습니다.
 
-- API: `POST /api/super-grok/animation-prompts`
-- MCP PM tool: `create_super_grok_animation_prompt`
-- 입력: 캐릭터 이미지 1장, 애니메이션/컷신 목표, 스타일 메모
-- 출력: 대시보드 카드, 복사용 프롬프트, 네거티브 프롬프트, JSON/Markdown 패키지
-- 저장 위치: `07_cinematics/work/super_grok_requests`
+주요 처리 단계:
 
-이 흐름은 외부 AI API를 자동 호출하지 않습니다. PM이 필요하다고 판단하면 대시보드에 패키지만 만들고, 사용자가 SuperGrok에 이미지와 프롬프트를 직접 넣는 방식입니다.
+1. 생성 결과 파일 탐색
+2. 프로젝트 작업 폴더로 복사
+3. 크로마키 배경 제거
+4. 알파 채널 기반 투명 PNG 생성
+5. 외곽선 잔여 픽셀 제거/despill
+6. 캐릭터 bounding box 추출
+7. 셀 내부 안전 여백 확보
+8. 기준선 및 중심축 정렬
+9. sprite sheet 생성
+10. 6fps GIF 미리보기 생성
+11. QA manifest JSON 생성
 
-## 디자인 통일성 테스트 업로드
+## QA Manifest
 
-대시보드의 `디자인 통일성 테스트 업로드`에서 이미지 1장을 올리면 허브가 다음 작업을 자동으로 준비합니다.
+각 산출물은 JSON manifest로 기록합니다.
 
-- 업로드 대상 선택: 캐릭터, 몬스터, 보스몬스터, 맵, 아이템
-- 참조 이미지를 대상별 업로드 폴더에 저장
-- `게임 개발 디자인`용 통일성 테스트 작업 생성
-- 대상별 통일성 체크 조건 생성
-- dispatch 큐 생성
+기록 항목 예시:
 
-이 단계는 디자인 검증용 큐만 만들며, 게임개발 실행이나 외부 AI API 호출은 하지 않습니다.
+- asset id
+- source file
+- output paths
+- sprite sheet size
+- grid size
+- cell size
+- frame count
+- fps
+- pivot
+- baseline/center alignment
+- transparent background 여부
+- QA pass/fail
+- Unity handoff 가능 여부
+
+manifest를 사용하는 이유는 사람이 이미지를 일일이 열어보지 않아도 산출물 상태와 전달 가능 여부를 추적하기 위해서입니다.
+
+## 스프라이트 규격 예시
+
+프로젝트 진행 중 모바일 환경과 반복 제작 효율을 고려해 스프라이트 규격을 표준화했습니다.
+
+```text
+character/monster proportion: 2-head SD
+direction: left/right side-view
+sheet: 1024x512 PNG
+grid: 4x2
+cell: 256x256
+frames: 8
+preview: 6fps GIF
+background: transparent
+pivot: bottom-center (0.5, 1.0)
+```
+
+이 규격은 메모리 사용량, 제작 속도, 애니메이션 컨트롤러 단순화, 모바일 화면 가독성을 고려해 선택했습니다.
 
 ## 실행
 
-Docker Desktop이 실행된 상태에서:
+Docker Desktop 실행 후:
 
 ```powershell
 docker compose up --build -d
 docker compose ps
 ```
 
-대시보드: <http://127.0.0.1:8000>
+대시보드:
 
-API 문서: <http://127.0.0.1:8000/docs>
+```text
+http://127.0.0.1:8000
+```
 
-상태 확인: <http://127.0.0.1:8000/health>
+API 문서:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+상태 확인:
+
+```text
+http://127.0.0.1:8000/health
+```
 
 종료:
 
 ```powershell
 docker compose down
 ```
-
-데이터 볼륨까지 삭제하는 `docker compose down -v`는 운영 기록을 지우므로 사용하지 않습니다.
 
 ## 로컬 개발
 
@@ -125,61 +208,25 @@ uvicorn app.main:app --reload
 python -m pytest -q
 ```
 
-## 담당 채팅
-
-- 총괄: 현재 `통합 제작 파이프라인 구축`
-- 기획·자료조사: 사용자가 직접 수행
-- 디자인: 기존 `게임 개발 디자인` 채팅 안에서 아래 3개 전문 프롬프트로 자동 분류
-  - 캐릭터 · 몬스터 · NPC (`design_entity_v1`)
-  - 맵 · 배경화면 · 아이템 (`design_world_item_v1`)
-  - 스킬 이펙트 · 스킬 (`design_skill_vfx_v1`)
-- Unity 구현: 기존 `게임개발`
-
-제목은 표시용이며 실제 라우팅은 [config/agents.json](config/agents.json)의 `thread_id`를 사용합니다.
-
-## MCP 총괄 PM
-
-총괄 PM 역할은 `mcp_server/pm_server.py`가 담당합니다. 이 MCP 서버는 별도 DB를 만들지 않고, 로컬 허브 API를 호출하는 tool 표면을 제공합니다.
+## MCP PM 서버 실행
 
 ```powershell
 $env:GAME_HUB_URL="http://127.0.0.1:8000"
 python -m mcp_server.pm_server
 ```
 
-자세한 내용은 [docs/MCP_PM_SERVER.md](docs/MCP_PM_SERVER.md)를 참고합니다.
+## 기술 키워드
 
-PM이 채팅창으로 지시하는 구조는 [docs/PM_ROUTING_ARCHITECTURE.md](docs/PM_ROUTING_ARCHITECTURE.md)에 정리되어 있습니다. 요약하면 MCP PM이 허브에 dispatch 지시서를 만들고, Codex dispatcher가 기존 채팅창으로 prompt를 전달합니다.
+`MCP`, `FastAPI`, `Python`, `Pillow`, `Ollama`, `Local LLM`, `Docker Compose`, `PostgreSQL`, `SQLite`, `Workflow Automation`, `Human-in-the-loop Approval`, `JSON Manifest`, `Sprite Sheet QA`, `Local-first AI Pipeline`
 
-## 현재 공식 운영 구조
+## 설계 의도
 
-```text
-사용자 직접 기획
-→ 총괄 PM 작업 지시서 정리
-→ 게임 개발 디자인
-→ 무료 로컬 반복 QA
-→ 사용자 승인
-→ 게임개발
-```
+이 프로젝트는 AI를 단순 보조 도구로 쓰는 것이 아니라, 작업 상태와 산출물 품질을 추적 가능한 자동화 시스템으로 묶는 실험입니다.
 
-- 기획/자료조사 전용 worker는 제거되었다.
-- 기획과 자료조사는 사용자가 직접 수행한다.
-- 반복 검사는 무료 로컬 Sprite QA와 런타임 보고서 등록을 우선 사용한다.
-- 외부 AI API는 기본 차단한다.
-- 게임개발은 사용자가 명시적으로 시작을 허가하기 전까지 진행하지 않는다.
+핵심 설계 원칙은 다음과 같습니다.
 
-## 게임 설정집 업로드 / 수정
-
-대시보드의 `게임 설정집 업로드 / 수정` 섹션에서 사용자가 만든 설정집을 업로드하고 작업본을 수정할 수 있다.
-
-- 지원 형식: `.md`, `.txt`, `.json`, `.yaml`, `.yml`, `.pdf`, `.docx`
-- 텍스트 계열 파일은 바로 Markdown 작업본으로 불러온다.
-- PDF/DOCX는 원본을 보관하고, 허브에서 수정할 Markdown 작업본 템플릿을 만든다.
-- 저장할 때마다 이전 작업본은 `01_game_bible/revisions`에 revision으로 백업된다.
-- 업로드 원본과 작업본은 로컬 자료로 관리하며 Git에 자동 포함하지 않는다.
-
-## 안전 원칙
-
-- API 키는 `.env`에만 두고 Git에 올리지 않습니다.
-- 승인되지 않은 에셋은 Unity 또는 영상 제작에 전달하지 않습니다.
-- PNG, GIF, PSD, 영상은 파일 저장소에 두고 DB에는 경로와 체크섬만 저장합니다.
-- 기존 `C:\game\character_pipeline\IdleBattleUnity`와 실행 중인 픽셀 에셋 WebUI는 자동으로 수정하지 않습니다.
+- 반복 작업은 자동화한다.
+- 품질 판단은 QA와 사용자 승인으로 분리한다.
+- 외부 API 의존도를 낮추고 로컬에서 재현 가능하게 만든다.
+- 산출물은 manifest로 추적한다.
+- 승인되지 않은 결과물은 개발 단계로 전달하지 않는다.

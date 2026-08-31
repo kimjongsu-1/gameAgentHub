@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "fixes": [
+    "hero scale 1.28 -> 1.85",
+    "monster scale 1.18-1.32 -> 1.62-1.90",
+    "map brightness/palette reduced",
+    "soft ground shadows added"
+  ],
+  "runtime_fps": 6,
+  "captured_frames": 12,
+  "all_adjacent_frames_changed": true,
+  "changed_pixels_between_adjacent_frames": [
+    23674,
+    22838,
+    21962,
+    20682,
+    17880,
+    24139,
+    31263,
+    33684,
+    30859,
+    27873,
+    24519
+  ],
+  "unity": {
+    "safe_clone": "C:\\game\\character_pipeline\\IdleBattleUnity_SubsetTest_20260701",
+    "original_project_untouched": true,
+    "executable": "C:\\game\\character_pipeline\\IdleBattleUnity_SubsetTest_20260701\\Build\\GrasslandMotionTest\\GrasslandMotionTest.exe",
+    "runtime_process_id": 23828
+  },
+  "runtime_gif": "08_runtime_captures/grassland_scale_match_character_monster_6fps.gif"
+}

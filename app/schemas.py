@@ -228,3 +228,33 @@ class SuperGrokPromptRead(BaseModel):
 class GameBibleUpdate(BaseModel):
     content: str
     notes: str | None = None
+
+
+class PromptTestCreate(BaseModel):
+    design_profile_id: Literal["entity_design", "world_item_design", "skill_vfx_design"]
+    title: str = Field(min_length=1, max_length=200)
+    candidate_prompt: str = Field(min_length=1)
+    notes: str | None = None
+    created_by: str = "user_dashboard"
+
+
+class PromptTestUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    candidate_prompt: str | None = Field(default=None, min_length=1)
+    notes: str | None = None
+
+
+class PromptTestRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    design_profile_id: str
+    title: str
+    candidate_prompt: str
+    active_prompt_snapshot: str
+    notes: str | None
+    status: str
+    test_payload: dict[str, Any]
+    created_by: str
+    created_at: datetime
+    updated_at: datetime

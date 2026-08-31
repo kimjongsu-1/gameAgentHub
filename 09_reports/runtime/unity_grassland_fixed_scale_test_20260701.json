@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "cause": "runtime depthScale changed every frame",
+  "fix": "removed dynamic depth scaling; transform.localScale is now immutable",
+  "runtime_scale_variation_percent": 0.0,
+  "fixed_scales": {
+    "hero": 1.85,
+    "monsters": [
+      1.62,
+      1.69,
+      1.76,
+      1.83,
+      1.9
+    ]
+  },
+  "source_sheet_body_height_variation_percent": {
+    "hero": 0.0,
+    "monsters": 0.0
+  },
+  "runtime_fps": 6,
+  "captured_frames": 12,
+  "all_adjacent_frames_changed": true,
+  "movement_preserved": true,
+  "animation_preserved": true,
+  "unity": {
+    "safe_clone": "C:\\game\\character_pipeline\\IdleBattleUnity_SubsetTest_20260701",
+    "original_project_untouched": true,
+    "executable": "C:\\game\\character_pipeline\\IdleBattleUnity_SubsetTest_20260701\\Build\\GrasslandMotionTest\\GrasslandMotionTest.exe",
+    "runtime_process_id": 28304
+  },
+  "runtime_gif": "08_runtime_captures/grassland_fixed_scale_character_monster_6fps.gif"
+}

@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "stage": "Stage 01 - Cracked Seal Road",
+  "runtime_fps": 6,
+  "captured_frames": 12,
+  "resolution": [
+    1280,
+    720
+  ],
+  "changed_pixels_between_adjacent_frames": [
+    12529,
+    11837,
+    11414,
+    10396,
+    9985,
+    12437,
+    15431,
+    16552,
+    15427,
+    14018,
+    12492
+  ],
+  "all_adjacent_frames_changed": true,
+  "map_asset": "04_concepts/work/STAGE01_RUNTIME_MAP/MAP_STAGE01_CRACKED_SEAL_ROAD_RUNTIME_V01.png",
+  "runtime_gif": "08_runtime_captures/stage01_cracked_seal_road_motion_unity_6fps.gif",
+  "unity_project": "C:\\game\\character_pipeline\\IdleBattleUnity_SubsetTest_20260701",
+  "unity_editor": "6000.3.18f1",
+  "original_project_untouched": true,
+  "units": {
+    "hero_walk": 1,
+    "monster_types": 5,
+    "monster_motions": [
+      "run",
+      "hit",
+      "attack"
+    ]
+  }
+}

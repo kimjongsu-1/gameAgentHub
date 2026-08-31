@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>게임 제작 통합 허브</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260630-design-profiles">
+  <link rel="stylesheet" href="/static/styles.css?v=20260630-prompt-tests">
 </head>
 <body>
   <main>
@@ -15,6 +15,7 @@
         <p class="subtitle">사용자 직접 기획, 디자인 제작, 무료 로컬 QA, 사용자 승인, Unity 적용을 한곳에서 관리합니다.</p>
       </div>
       <div class="header-actions">
+        <a class="nav-link" href="/motion-gifs">6fps 모션 GIF</a>
         <a class="nav-link" href="/images">이미지 관리</a>
         <span id="health" class="health">확인 중</span>
       </div>
@@ -109,6 +110,36 @@
       <div id="character-consistency-result" class="upload-result"></div>
     </section>
 
+    <section class="panel prompt-test-panel">
+      <div class="section-title"><h2>게임 개발 디자인 프롬프트 테스트</h2><span class="badge">운영본과 분리</span></div>
+      <p class="subtitle">새 프롬프트는 먼저 테스트 초안으로만 저장됩니다. 운영 프롬프트, dispatch, Unity에는 자동 반영되지 않습니다.</p>
+      <form id="prompt-test-form" class="prompt-test-form">
+        <label>
+          테스트 대상
+          <select name="design_profile_id">
+            <option value="entity_design">캐릭터 · 몬스터 · NPC</option>
+            <option value="world_item_design">맵 · 배경화면 · 아이템</option>
+            <option value="skill_vfx_design">스킬 이펙트 · 스킬</option>
+          </select>
+        </label>
+        <label>
+          테스트 이름
+          <input name="title" type="text" placeholder="예: 캐릭터 2등신 방향 고정 테스트 001" required>
+        </label>
+        <label class="prompt-test-wide">
+          후보 프롬프트
+          <textarea name="candidate_prompt" rows="10" placeholder="여기에 새 프롬프트를 입력하세요. 운영본에는 저장되지 않습니다." required></textarea>
+        </label>
+        <label class="prompt-test-wide">
+          테스트 메모
+          <input name="notes" type="text" placeholder="확인할 항목, 실패 기준, 비교 목적">
+        </label>
+        <button type="submit">테스트 초안 저장</button>
+        <span id="prompt-test-status" class="subtitle"></span>
+      </form>
+      <div id="prompt-tests" class="list empty">저장된 프롬프트 테스트가 없습니다.</div>
+    </section>
+
     <div class="grid">
       <section class="panel">
         <div class="section-title"><h2>최근 작업</h2><button onclick="loadDashboard()">새로고침</button></div>
@@ -148,6 +179,6 @@
       <div id="gateway" class="gateway-status"></div>
     </section>
   </main>
-  <script src="/static/app.js?v=20260630-design-profiles"></script>
+  <script src="/static/app.js?v=20260630-prompt-tests"></script>
 </body>
 </html>

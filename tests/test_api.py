@@ -61,6 +61,41 @@ def test_image_library_page_and_workspace_scan():
         assert saved["path"] == "05_sprites/qa/library_test.gif"
 
 
+def test_motion_gif_dashboard_lists_only_manifest_backed_6fps_previews():
+    root = get_settings().resolved_workspace_root
+    character_dir = root / "05_sprites/work/CHR_PROTAGONIST_BASE_01"
+    character_dir.mkdir(parents=True, exist_ok=True)
+    (character_dir / "CHR_TEST_idle_6fps.gif").write_bytes(valid_png_bytes())
+    (character_dir / "STAGE01_PROTAGONIST_SPRITE_QA_MANIFEST.json").write_text(
+        '{"character_id":"CHR_TEST","fps":6,"unity_handoff":"PENDING","animations":[{"animation":"idle","pass":true,"metrics":{"baseline_y":[1,1]}}]}',
+        encoding="utf-8",
+    )
+    monster_dir = root / "05_sprites/work/MONSTER_30_ANIMATIONS/MON_TEST"
+    monster_dir.mkdir(parents=True, exist_ok=True)
+    monster_gif = monster_dir / "MON_TEST_run_6fps.gif"
+    monster_gif.write_bytes(valid_png_bytes())
+    manifest_path = root / "05_sprites/work/MONSTER_30_ANIMATIONS/MONSTER_30_ANIMATION_MANIFEST.json"
+    manifest_path.write_text(
+        '{"sheet_standard":{"fps":6,"frames":16},"entries":[{"asset_id":"MON_TEST_RUN","monster_id":"MON_TEST","family":"TEST","palette":"TEST","motion":"run","gif_path":"05_sprites/work/MONSTER_30_ANIMATIONS/MON_TEST/MON_TEST_run_6fps.gif","qa":{"status":"PASS","fps":6,"frames":16}}]}',
+        encoding="utf-8",
+    )
+    with TestClient(app) as client:
+        page = client.get("/motion-gifs")
+        assert page.status_code == 200
+        assert "캐릭터·몬스터 6fps 모션" in page.text
+
+        response = client.get("/api/motion-gif-library")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["fps"] == 6
+        assert payload["character_count"] == 1
+        assert payload["monster_count"] == 1
+        assert payload["total"] == payload["character_count"] + payload["monster_count"]
+        assert all(item["qa_status"] == "PASS" for item in payload["items"])
+        assert all(item["path"].lower().endswith(".gif") for item in payload["items"])
+        assert all(item["fps"] == 6 for item in payload["items"])
+
+
 def test_image_design_group_matches_design_specializations():
     assert image_design_group("05_sprites/qa/monster/walk/preview.gif") == "entity_design"
     assert image_design_group("07_cinematics/STAGE01_BG_far.png", "BACKGROUND_LAYER") == "world_item_design"
@@ -114,6 +149,35 @@ def test_design_handoff_selects_world_item_and_skill_profiles():
             assert package["design_profile_id"] == profile_id
             assert package["design_profile_name"] == profile_name
             assert expected_text in package["prompt"]
+
+
+def test_prompt_test_draft_does_not_change_production_prompt():
+    from app.handoff import DESIGN_PROFILES
+
+    active_before = DESIGN_PROFILES["entity_design"]["prompt_template"]
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/prompt-tests",
+            json={
+                "design_profile_id": "entity_design",
+                "title": "캐릭터 프롬프트 실험 001",
+                "candidate_prompt": "테스트 후보 전용 문장",
+                "notes": "운영 반영 금지",
+            },
+        )
+        assert created.status_code == 201
+        draft = created.json()
+        assert draft["status"] == "DRAFT"
+        assert draft["active_prompt_snapshot"] == active_before
+        assert draft["test_payload"]["production_prompt_unchanged"] is True
+
+        prepared = client.post(f"/api/prompt-tests/{draft['id']}/prepare")
+        assert prepared.status_code == 200
+        payload = prepared.json()
+        assert payload["status"] == "READY_FOR_TEST"
+        assert "프롬프트 테스트 전용" in payload["test_payload"]["compiled_prompt"]
+        assert payload["test_payload"]["dispatch_created"] is False
+        assert DESIGN_PROFILES["entity_design"]["prompt_template"] == active_before
 
 
 def test_task_approval_flow_without_linked_game_asset():

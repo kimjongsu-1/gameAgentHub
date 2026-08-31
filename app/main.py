@@ -16,13 +16,14 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import Base, engine, get_db
-from app.handoff import build_handoff_package, find_worker
+from app.handoff import DESIGN_PROFILES, build_handoff_package, find_worker
 from app.models import (
     ApiUsage,
     Approval,
     ApprovalAsset,
     Asset,
     Dispatch,
+    PromptTestDraft,
     RuntimeReport,
     SuperGrokPromptPackage,
     Task,
@@ -40,6 +41,9 @@ from app.schemas import (
     DispatchStatusUpdate,
     GameBibleUpdate,
     HandoffPackageRead,
+    PromptTestCreate,
+    PromptTestRead,
+    PromptTestUpdate,
     RuntimeReportCreate,
     RuntimeReportRead,
     SpriteQARunRequest,
@@ -81,6 +85,27 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 def load_agents() -> dict:
     path = settings.project_root / "config" / "agents.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def prompt_test_compiled_text(item: PromptTestDraft) -> str:
+    profile = DESIGN_PROFILES[item.design_profile_id]
+    return "\n".join(
+        [
+            "[게임 개발 디자인 프롬프트 테스트 전용]",
+            "주의: 이 프롬프트는 운영 프로필에 반영되지 않은 테스트 초안이다.",
+            f"전문 제작군: {profile['name']}",
+            f"운영 프로필: {profile['prompt_profile']}",
+            f"테스트 초안 ID: {item.id}",
+            "",
+            "[후보 프롬프트]",
+            item.candidate_prompt,
+            "",
+            "[테스트 규칙]",
+            "- 결과는 테스트 결과물로만 저장하고 게임 또는 Unity에 적용하지 않는다.",
+            "- 사용자 승인 전에는 운영 프롬프트를 변경하지 않는다.",
+            "- 운영본과 후보의 차이, 장점, 실패 항목을 보고한다.",
+        ]
+    )
 
 
 def worker_is_configured(worker: dict) -> bool:
@@ -585,6 +610,11 @@ def image_library_page() -> FileResponse:
     return FileResponse(static_dir / "images.html")
 
 
+@app.get("/motion-gifs", include_in_schema=False)
+def motion_gif_library_page() -> FileResponse:
+    return FileResponse(static_dir / "motion-gifs.html")
+
+
 @app.get("/workspace-files/{file_path:path}", include_in_schema=False)
 def workspace_file(file_path: str) -> FileResponse:
     path = resolve_workspace_path(file_path)
@@ -638,6 +668,135 @@ def image_is_source(path: str) -> bool:
         marker in name
         for marker in ("source", "chroma", "candidate", "raw", "mask", "matte", "debug")
     )
+
+
+def _motion_name(value: str) -> str:
+    return {
+        "basic_attack": "기본 공격",
+        "attack": "공격",
+        "death": "사망",
+        "hit": "피격",
+        "idle": "대기",
+        "run": "달리기",
+        "walk": "걷기",
+    }.get(value, value.replace("_", " ").title())
+
+
+@app.get("/api/motion-gif-library")
+def motion_gif_library() -> dict:
+    """Return canonical 6fps GIF previews backed by passing local QA manifests."""
+    root = settings.resolved_workspace_root
+    items: list[dict] = []
+
+    rebuilt_manifest_path = root / "05_sprites/work/CHR_PROTAGONIST_REBUILD_V01/CHR_PROTAGONIST_REBUILD_V01_MANIFEST.json"
+    character_manifest_path = root / "05_sprites/work/CHR_PROTAGONIST_BASE_01/STAGE01_PROTAGONIST_SPRITE_QA_MANIFEST.json"
+    if rebuilt_manifest_path.exists():
+        manifest = json.loads(rebuilt_manifest_path.read_text(encoding="utf-8"))
+        character_id = manifest.get("character_id", "CHR_PROTAGONIST_REBUILD_V01")
+        for animation in manifest.get("animations", []):
+            if animation.get("qa_status") != "PASS":
+                continue
+            relative = str(animation.get("gif_path", "")).replace("\\", "/")
+            if not relative or not resolve_workspace_path(relative).is_file():
+                continue
+            motion = str(animation.get("motion", "motion"))
+            items.append({
+                "id": f"{character_id}_{motion}",
+                "subject_id": character_id,
+                "subject_type": "character",
+                "subject_label": "새 주인공 V01",
+                "motion": motion,
+                "motion_label": animation.get("motion_label") or _motion_name(motion),
+                "path": relative,
+                "url": f"/workspace-files/{relative}",
+                "fps": float(animation.get("fps", 6)),
+                "frame_count": int(animation.get("frames", 16)),
+                "qa_status": "PASS",
+                "approval_status": "PENDING",
+                "family": None,
+                "palette": None,
+            })
+    elif character_manifest_path.exists():
+        manifest = json.loads(character_manifest_path.read_text(encoding="utf-8"))
+        character_id = manifest.get("character_id", "CHR_PROTAGONIST_BASE_01")
+        fps = float(manifest.get("fps", 6))
+        for animation in manifest.get("animations", []):
+            if not animation.get("pass"):
+                continue
+            motion = str(animation.get("animation", "motion"))
+            relative = f"05_sprites/work/CHR_PROTAGONIST_BASE_01/{character_id}_{motion}_6fps.gif"
+            gif_path = resolve_workspace_path(relative)
+            if not gif_path.is_file():
+                continue
+            items.append({
+                "id": f"{character_id}_{motion}",
+                "subject_id": character_id,
+                "subject_type": "character",
+                "subject_label": "주인공",
+                "motion": motion,
+                "motion_label": _motion_name(motion),
+                "path": relative,
+                "url": f"/workspace-files/{relative}",
+                "fps": fps,
+                "frame_count": len(animation.get("metrics", {}).get("baseline_y", [])) or None,
+                "qa_status": "PASS",
+                "approval_status": "PENDING" if "PENDING" in str(manifest.get("unity_handoff", "")) else "APPROVED",
+                "family": None,
+                "palette": None,
+            })
+
+    strict_retest_path = root / "05_sprites/work/MONSTER_30_ANIMATIONS/MONSTER_30_STRICT_STABILITY_RETEST.json"
+    strict_by_asset: dict[str, dict] = {}
+    if strict_retest_path.exists():
+        strict_report = json.loads(strict_retest_path.read_text(encoding="utf-8"))
+        strict_by_asset = {item["asset_id"]: item for item in strict_report.get("results", [])}
+
+    monster_manifest_path = root / "05_sprites/work/MONSTER_30_ANIMATIONS/MONSTER_30_ANIMATION_MANIFEST.json"
+    if monster_manifest_path.exists():
+        manifest = json.loads(monster_manifest_path.read_text(encoding="utf-8"))
+        for entry in manifest.get("entries", []):
+            qa = entry.get("qa") or {}
+            if qa.get("status") != "PASS":
+                continue
+            relative = str(entry.get("gif_path", "")).replace("\\", "/")
+            if not relative:
+                continue
+            gif_path = resolve_workspace_path(relative)
+            if not gif_path.is_file():
+                continue
+            motion = str(entry.get("motion", "motion"))
+            monster_id = str(entry.get("monster_id", "MONSTER"))
+            strict = strict_by_asset.get(str(entry.get("asset_id", "")), {})
+            needs_rework = strict.get("strict_scale_consistency") == "FAIL" or strict.get("horizontal_stability") == "FAIL"
+            items.append({
+                "id": str(entry.get("asset_id", f"{monster_id}_{motion}")),
+                "subject_id": monster_id,
+                "subject_type": "monster",
+                "subject_label": monster_id.replace("MON_", "").replace("_V01", "").replace("_", " "),
+                "motion": motion,
+                "motion_label": _motion_name(motion),
+                "path": relative,
+                "url": f"/workspace-files/{relative}",
+                "fps": float(qa.get("fps", manifest.get("sheet_standard", {}).get("fps", 6))),
+                "frame_count": int(qa.get("frames", manifest.get("sheet_standard", {}).get("frames", 16))),
+                "qa_status": "FAIL" if needs_rework else "PASS",
+                "approval_status": "BLOCKED" if needs_rework else "APPROVED",
+                "stability_status": "REVISION_REQUIRED" if needs_rework else "PASS",
+                "horizontal_stability": strict.get("horizontal_stability", "PASS"),
+                "scale_consistency": strict.get("strict_scale_consistency", "NOT_TESTED"),
+                "height_variation_percent": strict.get("height_variation_percent"),
+                "family": entry.get("family"),
+                "palette": entry.get("palette"),
+            })
+
+    items.sort(key=lambda item: (item["subject_type"], item["subject_id"], item["motion"]))
+    return {
+        "items": items,
+        "total": len(items),
+        "character_count": sum(item["subject_type"] == "character" for item in items),
+        "monster_count": sum(item["subject_type"] == "monster" for item in items),
+        "fps": 6,
+    }
 
 
 @app.get("/api/image-library")
@@ -741,6 +900,78 @@ def list_tasks(
     if status:
         query = query.where(Task.status == status)
     return list(db.scalars(query))
+
+
+@app.get("/api/prompt-tests", response_model=list[PromptTestRead])
+def list_prompt_tests(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> list[PromptTestDraft]:
+    return list(db.scalars(select(PromptTestDraft).order_by(PromptTestDraft.updated_at.desc()).limit(limit)))
+
+
+@app.post("/api/prompt-tests", response_model=PromptTestRead, status_code=201)
+def create_prompt_test(payload: PromptTestCreate, db: Session = Depends(get_db)) -> PromptTestDraft:
+    profile = DESIGN_PROFILES[payload.design_profile_id]
+    active_snapshot = profile.get("prompt_template") or "\n".join(profile.get("requirements", []))
+    item = PromptTestDraft(
+        **payload.model_dump(),
+        active_prompt_snapshot=active_snapshot,
+        status="DRAFT",
+        test_payload={
+            "production_prompt_unchanged": True,
+            "dispatch_created": False,
+            "unity_blocked": True,
+        },
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.patch("/api/prompt-tests/{prompt_test_id}", response_model=PromptTestRead)
+def update_prompt_test(
+    prompt_test_id: str,
+    payload: PromptTestUpdate,
+    db: Session = Depends(get_db),
+) -> PromptTestDraft:
+    item = db.get(PromptTestDraft, prompt_test_id)
+    if not item:
+        raise HTTPException(404, detail="Prompt test draft not found")
+    if item.status not in {"DRAFT", "READY_FOR_TEST"}:
+        raise HTTPException(409, detail="Only draft prompt tests can be edited")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(item, key, value)
+    item.status = "DRAFT"
+    item.test_payload = {
+        **(item.test_payload or {}),
+        "production_prompt_unchanged": True,
+        "dispatch_created": False,
+        "unity_blocked": True,
+    }
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.post("/api/prompt-tests/{prompt_test_id}/prepare", response_model=PromptTestRead)
+def prepare_prompt_test(prompt_test_id: str, db: Session = Depends(get_db)) -> PromptTestDraft:
+    item = db.get(PromptTestDraft, prompt_test_id)
+    if not item:
+        raise HTTPException(404, detail="Prompt test draft not found")
+    item.status = "READY_FOR_TEST"
+    item.test_payload = {
+        **(item.test_payload or {}),
+        "compiled_prompt": prompt_test_compiled_text(item),
+        "production_prompt_unchanged": True,
+        "dispatch_created": False,
+        "unity_blocked": True,
+        "prepared_at": datetime.now(timezone.utc).isoformat(),
+    }
+    db.commit()
+    db.refresh(item)
+    return item
 
 
 @app.post("/api/tasks", response_model=TaskRead, status_code=201)
@@ -1499,6 +1730,9 @@ def dashboard_data(db: Session = Depends(get_db)) -> dict:
     recent_super_grok_prompts = list(
         db.scalars(select(SuperGrokPromptPackage).order_by(SuperGrokPromptPackage.created_at.desc()).limit(6))
     )
+    recent_prompt_tests = list(
+        db.scalars(select(PromptTestDraft).order_by(PromptTestDraft.updated_at.desc()).limit(8))
+    )
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     costs = monthly_provider_costs(db)
     asset_counts = Counter(asset.status for asset in db.scalars(select(Asset)))
@@ -1516,6 +1750,7 @@ def dashboard_data(db: Session = Depends(get_db)) -> dict:
         "recent_dispatches": [DispatchRead.model_validate(item) for item in recent_dispatches],
         "recent_runtime_reports": [RuntimeReportRead.model_validate(item) for item in recent_runtime_reports],
         "recent_super_grok_prompts": [SuperGrokPromptRead.model_validate(item) for item in recent_super_grok_prompts],
+        "recent_prompt_tests": [PromptTestRead.model_validate(item) for item in recent_prompt_tests],
         "monthly_cost_usd": costs,
         "budgets": {
             "claude": {

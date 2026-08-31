@@ -65,6 +65,26 @@ function superGrokPromptRow(item) {
   </article>`;
 }
 
+function promptTestRow(item) {
+  const compiled = item.test_payload?.compiled_prompt || item.candidate_prompt;
+  const promptId = `prompt-test-${item.id}`;
+  const prepare = item.status === "DRAFT"
+    ? `<button class="prepare-prompt-test" data-prompt-test-id="${item.id}">테스트 준비</button>`
+    : "";
+  return `<article class="prompt-test-card">
+    <div class="row">
+      <strong>${escapeHtml(item.title)}</strong>
+      <span class="status">${escapeHtml(item.status)}</span>
+      <small>${escapeHtml(item.design_profile_id)} · 운영 프롬프트 변경 없음 · Unity 차단</small>
+    </div>
+    <textarea id="${promptId}" readonly>${escapeHtml(compiled)}</textarea>
+    <div class="prompt-test-actions">
+      ${prepare}
+      <button class="copy-text" data-copy-target="${promptId}">테스트 프롬프트 복사</button>
+    </div>
+  </article>`;
+}
+
 function pipelineStageRow(stage) {
   const flags = [
     stage.configured ? "연결 완료" : "연결 필요",
@@ -160,6 +180,12 @@ async function loadDashboard() {
     el("super-grok-prompts").innerHTML = superGrokPrompts.length
       ? superGrokPrompts.map(superGrokPromptRow).join("")
       : "생성된 SuperGrok 요청 패키지가 없습니다.";
+
+    const promptTests = data.recent_prompt_tests || [];
+    el("prompt-tests").className = promptTests.length ? "list" : "list empty";
+    el("prompt-tests").innerHTML = promptTests.length
+      ? promptTests.map(promptTestRow).join("")
+      : "저장된 프롬프트 테스트가 없습니다.";
 
     const providers = ["claude", "openai"];
     el("costs").innerHTML = providers.map((provider) => {
@@ -309,6 +335,42 @@ async function createCharacterConsistencyTest(form) {
   }
 }
 
+async function createPromptTest(form) {
+  const status = el("prompt-test-status");
+  const button = form.querySelector("button[type='submit']");
+  const values = new FormData(form);
+  button.disabled = true;
+  status.textContent = "테스트 초안 저장 중...";
+  try {
+    const response = await fetch("/api/prompt-tests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        design_profile_id: values.get("design_profile_id"),
+        title: values.get("title"),
+        candidate_prompt: values.get("candidate_prompt"),
+        notes: values.get("notes") || null,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "테스트 초안 저장 실패");
+    form.reset();
+    status.textContent = "테스트 초안 저장 완료 · 운영 프롬프트는 변경되지 않았습니다.";
+    await loadDashboard();
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function preparePromptTest(promptTestId) {
+  const response = await fetch(`/api/prompt-tests/${promptTestId}/prepare`, { method: "POST" });
+  const payload = await response.json();
+  if (!response.ok) window.alert(payload.detail || "테스트 준비 실패");
+  await loadDashboard();
+}
+
 el("approvals").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-decision]");
   if (!button) return;
@@ -326,6 +388,21 @@ el("super-grok-prompts").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-copy-target]");
   if (!button) return;
   copyTextById(button.dataset.copyTarget);
+});
+
+el("prompt-tests").addEventListener("click", (event) => {
+  const prepareButton = event.target.closest("button[data-prompt-test-id]");
+  if (prepareButton) {
+    preparePromptTest(prepareButton.dataset.promptTestId);
+    return;
+  }
+  const copyButton = event.target.closest("button[data-copy-target]");
+  if (copyButton) copyTextById(copyButton.dataset.copyTarget);
+});
+
+el("prompt-test-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  createPromptTest(event.currentTarget);
 });
 
 el("character-consistency-form").addEventListener("submit", (event) => {

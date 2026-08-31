@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>6fps 모션 GIF · 게임 제작 통합 허브</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260701-motion-gifs">
+  <link rel="stylesheet" href="/static/motion-gifs.css?v=20260701-motion-gifs">
+</head>
+<body>
+  <main class="motion-page">
+    <header class="motion-header">
+      <div>
+        <p class="eyebrow">FINAL MOTION REVIEW</p>
+        <h1>캐릭터·몬스터 6fps 모션</h1>
+        <p class="subtitle">로컬 QA를 통과한 완성 모션 GIF만 계속 재생합니다.</p>
+      </div>
+      <div class="header-actions">
+        <a class="nav-link" href="/images">전체 이미지</a>
+        <a class="nav-link" href="/">통합 허브</a>
+      </div>
+    </header>
+
+    <section class="motion-summary" aria-label="모션 요약">
+      <article><span>전체 모션</span><strong id="total-count">-</strong></article>
+      <article><span>캐릭터</span><strong id="character-count">-</strong></article>
+      <article><span>몬스터</span><strong id="monster-count">-</strong></article>
+      <article><span>재생 속도</span><strong>6fps</strong></article>
+    </section>
+
+    <section class="panel motion-toolbar" aria-label="모션 필터">
+      <label class="search-field"><span>검색</span><input id="motion-search" type="search" placeholder="캐릭터·몬스터 ID 검색"></label>
+      <label><span>대상</span><select id="subject-filter"><option value="all">전체</option><option value="character">캐릭터</option><option value="monster">몬스터</option></select></label>
+      <label><span>모션</span><select id="motion-filter"><option value="all">전체 모션</option></select></label>
+      <label><span>계열</span><select id="family-filter"><option value="all">전체 계열</option></select></label>
+      <label><span>색상</span><select id="palette-filter"><option value="all">전체 색상</option></select></label>
+    </section>
+
+    <section class="motion-result-bar"><strong id="result-count">불러오는 중</strong><span>GIF 위에 마우스를 올리지 않아도 자동 재생됩니다.</span></section>
+    <section id="motion-groups" class="motion-groups" aria-live="polite"></section>
+  </main>
+
+  <div id="motion-lightbox" class="motion-lightbox" hidden>
+    <button id="motion-backdrop" class="motion-backdrop" aria-label="확대 보기 닫기"></button>
+    <section class="motion-dialog" role="dialog" aria-modal="true" aria-labelledby="motion-dialog-title">
+      <button id="motion-close" class="motion-close" aria-label="확대 보기 닫기">×</button>
+      <img id="motion-dialog-image" alt="선택한 모션 GIF">
+      <div class="motion-dialog-info"><h2 id="motion-dialog-title"></h2><p id="motion-dialog-meta"></p><p id="motion-dialog-path"></p></div>
+    </section>
+  </div>
+  <script src="/static/motion-gifs.js?v=20260701-motion-gifs"></script>
+</body>
+</html>
